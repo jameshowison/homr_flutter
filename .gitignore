@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# ONNX model files (large binaries — fetch with tools/fetch_models.py)
+assets/models/*.onnx
