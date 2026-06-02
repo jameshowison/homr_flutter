@@ -46,3 +46,6 @@ app.*.map.json
 
 # ONNX model files (large binaries — fetch with tools/fetch_models.py)
 assets/models/*.onnx
+
+# Xcode SwiftPM derived data
+**/xcshareddata/swiftpm/
