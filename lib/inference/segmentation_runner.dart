@@ -1,0 +1,161 @@
+import 'dart:typed_data';
+import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
+import 'package:image/image.dart' as img;
+
+class SegmentationRunner {
+  static const String _modelAsset =
+      'assets/models/segnet_308-3296ccd40960f90ca6ab9c035cca945675d30a0f_fp16.onnx';
+  static const int _patchSize = 320;
+  static const int _numClasses = 6;
+  static const int _batchSize = 8;
+
+  static OrtSession? _session;
+
+  static Future<OrtSession> _getSession() async {
+    _session ??= await OnnxRuntime().createSessionFromAsset(_modelAsset);
+    return _session!;
+  }
+
+  Future<Uint8List> runSegmentation(Uint8List pngBytes) async {
+    final decoded = img.decodeImage(pngBytes);
+    if (decoded == null) throw Exception('Failed to decode PNG');
+
+    final gray = img.grayscale(decoded);
+    final int W = gray.width;
+    final int H = gray.height;
+
+    final session = await _getSession();
+
+    // Accumulate results
+    final reconstructed = List<double>.filled(H * W, 0.0);
+    final weight = List<double>.filled(H * W, 0.0);
+
+    // Collect patches in batches
+    final List<Float32List> pendingPatchData = [];
+    final List<(int, int)> pendingPatchOrigins = [];
+
+    Future<void> flushBatch() async {
+      if (pendingPatchData.isEmpty) return;
+
+      final batchLen = pendingPatchData.length;
+      final flatSize = batchLen * _patchSize * _patchSize * 3;
+      final batchData = Float32List(flatSize);
+      for (int b = 0; b < batchLen; b++) {
+        final src = pendingPatchData[b];
+        batchData.setRange(b * _patchSize * _patchSize * 3,
+            (b + 1) * _patchSize * _patchSize * 3, src);
+      }
+
+      OrtValue? inputFp32;
+      OrtValue? inputFp16;
+      OrtValue? outputValue;
+
+      try {
+        inputFp32 = await OrtValue.fromList(
+            batchData, [batchLen, 3, _patchSize, _patchSize]);
+        inputFp16 = await inputFp32.to(OrtDataType.float16);
+        inputFp32.dispose();
+        inputFp32 = null;
+
+        final outputs = await session.run({'input': inputFp16});
+        inputFp16.dispose();
+        inputFp16 = null;
+
+        outputValue = outputs.values.first;
+        final flatOutput = await outputValue.asFlattenedList();
+        outputValue.dispose();
+        outputValue = null;
+
+        // flatOutput: [batchLen, 6, 320, 320]
+        for (int b = 0; b < batchLen; b++) {
+          final (px, py) = pendingPatchOrigins[b];
+          final y0 = py < 0 ? 0 : py;
+          final y1 = (py + _patchSize) < H ? (py + _patchSize) : H;
+          final x0 = px < 0 ? 0 : px;
+          final x1 = (px + _patchSize) < W ? (px + _patchSize) : W;
+          final ph = y1 - y0;
+          final pw = x1 - x0;
+
+          for (int row = 0; row < ph; row++) {
+            for (int col = 0; col < pw; col++) {
+              // Find argmax over classes for this pixel
+              int bestClass = 0;
+              double bestVal = double.negativeInfinity;
+              for (int c = 0; c < _numClasses; c++) {
+                final idx = b * _numClasses * _patchSize * _patchSize +
+                    c * _patchSize * _patchSize +
+                    row * _patchSize +
+                    col;
+                final val = (flatOutput[idx] as num).toDouble();
+                if (val > bestVal) {
+                  bestVal = val;
+                  bestClass = c;
+                }
+              }
+              final outIdx = (y0 + row) * W + (x0 + col);
+              reconstructed[outIdx] += bestClass.toDouble();
+              weight[outIdx] += 1.0;
+            }
+          }
+        }
+      } finally {
+        inputFp32?.dispose();
+        inputFp16?.dispose();
+        outputValue?.dispose();
+      }
+
+      pendingPatchData.clear();
+      pendingPatchOrigins.clear();
+    }
+
+    // Patch loop — port from Python exactly:
+    // for y_loop in range(0, max(h, 320), 320): y = min(y_loop, h-320)
+    // for x_loop in range(0, max(w, 320), 320): x = min(x_loop, w-320)
+    final yMax = H > _patchSize ? H : _patchSize;
+    final xMax = W > _patchSize ? W : _patchSize;
+
+    for (int yLoop = 0; yLoop < yMax; yLoop += _patchSize) {
+      final int py = yLoop < (H - _patchSize) ? yLoop : (H - _patchSize);
+
+      for (int xLoop = 0; xLoop < xMax; xLoop += _patchSize) {
+        final int px = xLoop < (W - _patchSize) ? xLoop : (W - _patchSize);
+
+        // Extract patch: CHW layout, grayscale replicated to 3 channels
+        final patchData = Float32List(_patchSize * _patchSize * 3);
+        for (int c = 0; c < 3; c++) {
+          for (int row = 0; row < _patchSize; row++) {
+            for (int col = 0; col < _patchSize; col++) {
+              final imgY = py + row;
+              final imgX = px + col;
+              double pixelVal;
+              if (imgY >= 0 && imgY < H && imgX >= 0 && imgX < W) {
+                final pixel = gray.getPixel(imgX, imgY);
+                pixelVal = pixel.r.toDouble();
+              } else {
+                pixelVal = 255.0;
+              }
+              patchData[c * _patchSize * _patchSize + row * _patchSize + col] =
+                  pixelVal;
+            }
+          }
+        }
+
+        pendingPatchData.add(patchData);
+        pendingPatchOrigins.add((px, py));
+
+        if (pendingPatchData.length >= _batchSize) {
+          await flushBatch();
+        }
+      }
+    }
+
+    await flushBatch();
+
+    return Uint8List.fromList(
+      List<int>.generate(H * W, (i) {
+        if (weight[i] == 0.0) return 0;
+        return (reconstructed[i] / weight[i]).round();
+      }),
+    );
+  }
+}
