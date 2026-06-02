@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import 'capture/capture_screen.dart';
+import 'capture/crop_screen.dart';
 import 'capture/review_screen.dart';
 
 void main() {
@@ -34,7 +35,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  Uint8List? _lastThresholded;
+  CropResult? _lastCrop;
 
   Future<void> _openScanner() async {
     final file = await Navigator.push<File>(
@@ -47,7 +48,13 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (_) => ReviewScreen(scanned: file)),
     );
-    if (png != null) setState(() => _lastThresholded = png);
+    if (png == null || !mounted) return;
+
+    final crop = await Navigator.push<CropResult>(
+      context,
+      MaterialPageRoute(builder: (_) => CropScreen(thresholdedPng: png)),
+    );
+    if (crop != null) setState(() => _lastCrop = crop);
   }
 
   @override
@@ -55,19 +62,28 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Homr')),
       body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_lastThresholded != null) ...[
-              Image.memory(_lastThresholded!, height: 200),
-              const SizedBox(height: 24),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_lastCrop != null) ...[
+                Text('Song', style: Theme.of(context).textTheme.labelLarge),
+                const SizedBox(height: 4),
+                Image.memory(_lastCrop!.songBytes, height: 150),
+                const SizedBox(height: 12),
+                Text('Title', style: Theme.of(context).textTheme.labelLarge),
+                const SizedBox(height: 4),
+                Image.memory(_lastCrop!.titleBytes, height: 80),
+                const SizedBox(height: 24),
+              ],
+              FilledButton.icon(
+                onPressed: _openScanner,
+                icon: const Icon(Icons.document_scanner),
+                label: Text(_lastCrop == null ? 'Scan Sheet Music' : 'Scan Again'),
+              ),
             ],
-            FilledButton.icon(
-              onPressed: _openScanner,
-              icon: const Icon(Icons.document_scanner),
-              label: Text(_lastThresholded == null ? 'Scan Sheet Music' : 'Scan Again'),
-            ),
-          ],
+          ),
         ),
       ),
     );

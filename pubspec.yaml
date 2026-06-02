@@ -35,6 +35,7 @@ dependencies:
   flutter_onnxruntime: ^1.5.1
   flutter_doc_scanner: ^0.0.20
   image: ^4.0.0
+  image_cropper: ^12.0.0
   path_provider: ^2.1.0
   xml: ^6.0.0
 
