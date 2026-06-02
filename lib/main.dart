@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import 'capture/capture_screen.dart';
+import 'capture/review_screen.dart';
 
 void main() {
   runApp(const HomrApp());
@@ -32,16 +34,20 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  File? _lastScan;
+  Uint8List? _lastThresholded;
 
   Future<void> _openScanner() async {
     final file = await Navigator.push<File>(
       context,
       MaterialPageRoute(builder: (_) => const CaptureScreen()),
     );
-    if (file != null) {
-      setState(() => _lastScan = file);
-    }
+    if (file == null || !mounted) return;
+
+    final png = await Navigator.push<Uint8List>(
+      context,
+      MaterialPageRoute(builder: (_) => ReviewScreen(scanned: file)),
+    );
+    if (png != null) setState(() => _lastThresholded = png);
   }
 
   @override
@@ -52,19 +58,14 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_lastScan != null) ...[
-              Image.file(_lastScan!, height: 200),
-              const SizedBox(height: 8),
-              Text(
-                _lastScan!.path.split('/').last,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+            if (_lastThresholded != null) ...[
+              Image.memory(_lastThresholded!, height: 200),
               const SizedBox(height: 24),
             ],
             FilledButton.icon(
               onPressed: _openScanner,
               icon: const Icon(Icons.document_scanner),
-              label: Text(_lastScan == null ? 'Scan Sheet Music' : 'Scan Again'),
+              label: Text(_lastThresholded == null ? 'Scan Sheet Music' : 'Scan Again'),
             ),
           ],
         ),
