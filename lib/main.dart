@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'capture/capture_screen.dart';
 import 'capture/crop_screen.dart';
 import 'capture/review_screen.dart';
+import 'omr_result_screen.dart';
 
 void main() {
   runApp(const HomrApp());
@@ -54,7 +55,13 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (_) => CropScreen(thresholdedPng: png)),
     );
-    if (crop != null) setState(() => _lastCrop = crop);
+    if (crop == null || !mounted) return;
+    setState(() => _lastCrop = crop);
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => OmrResultScreen(cropResult: crop)),
+    );
   }
 
   @override
