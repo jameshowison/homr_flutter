@@ -126,9 +126,12 @@ class TransformerRunner {
 
       encoderOutput = encoderOutputs.values.first;
 
-      // Extract full encoder output as flat list for context reduction
+      // Extract full encoder output as flat list for context reduction.
+      // encoderOutput stays FP16 (used as decoder context); read a FP32 copy.
       // encoderOutput shape: [1, seq_len, 512]
-      final encoderFlat = await encoderOutput.asFlattenedList();
+      final encoderOutputFp32 = await encoderOutput.to(OrtDataType.float32);
+      final encoderFlat = await encoderOutputFp32.asFlattenedList();
+      encoderOutputFp32.dispose();
 
       // Build contextReduced: first token [1, 1, 512] float32 → fp16
       final contextReducedData = Float32List(512);
@@ -215,27 +218,27 @@ class TransformerRunner {
           v?.dispose();
         }
 
-        // Extract logits and compute argmax for each head
-        // Logits shape: [1, seq_len_so_far, num_classes] — take last position
-        final OrtValue outRhythmsVal = decoderOutputs['out_rhythms']!;
-        final OrtValue outPitchsVal = decoderOutputs['out_pitchs']!;
-        final OrtValue outLiftsVal = decoderOutputs['out_lifts']!;
-        final OrtValue outPositionsVal = decoderOutputs['out_positions']!;
-        final OrtValue outArticulationsVal = decoderOutputs['out_articulations']!;
-        final OrtValue? attentionVal = decoderOutputs['attention'];
+        // Extract logits and compute argmax for each head.
+        // Logits shape: [1, seq_len_so_far, num_classes] — take last position.
+        // Convert FP16 logits to FP32 before reading (asFlattenedList misreads FP16).
+        Future<List<dynamic>> readFp16Logits(OrtValue raw) async {
+          final fp32 = await raw.to(OrtDataType.float32);
+          raw.dispose();
+          final flat = await fp32.asFlattenedList();
+          fp32.dispose();
+          return flat;
+        }
 
-        final rhythmFlat = await outRhythmsVal.asFlattenedList();
-        final pitchFlat = await outPitchsVal.asFlattenedList();
-        final liftFlat = await outLiftsVal.asFlattenedList();
-        final positionFlat = await outPositionsVal.asFlattenedList();
-        final articulationFlat = await outArticulationsVal.asFlattenedList();
+        final rhythmFlat =
+            await readFp16Logits(decoderOutputs['out_rhythms']!);
+        final pitchFlat = await readFp16Logits(decoderOutputs['out_pitchs']!);
+        final liftFlat = await readFp16Logits(decoderOutputs['out_lifts']!);
+        final positionFlat =
+            await readFp16Logits(decoderOutputs['out_positions']!);
+        final articulationFlat =
+            await readFp16Logits(decoderOutputs['out_articulations']!);
 
-        outRhythmsVal.dispose();
-        outPitchsVal.dispose();
-        outLiftsVal.dispose();
-        outPositionsVal.dispose();
-        outArticulationsVal.dispose();
-        attentionVal?.dispose();
+        decoderOutputs['attention']?.dispose();
 
         // Argmax at last position
         final int rhythmClasses = rhythmFlat.length ~/ (step + 1);

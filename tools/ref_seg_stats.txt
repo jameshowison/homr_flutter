@@ -1,0 +1,8 @@
+image_size: 2674x1574
+total_pixels: 4208876
+class_0_background: 3763400
+class_1_stems_rests: 28919
+class_2_noteheads: 61999
+class_3_clefs_keys: 18106
+class_4_staff_lines: 336452
+class_5_other_symbols: 0

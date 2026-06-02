@@ -20,7 +20,20 @@ class SegmentationRunner {
     final decoded = img.decodeImage(pngBytes);
     if (decoded == null) throw Exception('Failed to decode PNG');
 
-    final gray = img.grayscale(decoded);
+    // Convert to uint8 grayscale for patch extraction.
+    // img.grayscale() corrupts uint1 PNGs (all pixels become 1 after the call).
+    // uint1 already encodes 0=black / 1=white — direct convert to uint8
+    // maps those to 0=black / 255=white without any inversion needed.
+    final img.Image gray;
+    if (decoded.format == img.Format.uint1) {
+      gray = decoded.convert(format: img.Format.uint8, numChannels: 1);
+    } else {
+      final rawGray = img.grayscale(decoded);
+      gray = rawGray.format == img.Format.uint8
+          ? rawGray
+          : rawGray.convert(format: img.Format.uint8, numChannels: 1);
+    }
+
     final int W = gray.width;
     final int H = gray.height;
 
@@ -48,7 +61,6 @@ class SegmentationRunner {
 
       OrtValue? inputFp32;
       OrtValue? inputFp16;
-      OrtValue? outputValue;
 
       try {
         inputFp32 = await OrtValue.fromList(
@@ -61,10 +73,14 @@ class SegmentationRunner {
         inputFp16.dispose();
         inputFp16 = null;
 
-        outputValue = outputs.values.first;
-        final flatOutput = await outputValue.asFlattenedList();
-        outputValue.dispose();
-        outputValue = null;
+        // The FP16 model outputs FP16 logits; asFlattenedList() misreads FP16
+        // bytes as float32, yielding all-zero values. Convert to float32 first.
+        final rawOutput = outputs.values.first;
+
+        final outputFp32 = await rawOutput.to(OrtDataType.float32);
+        rawOutput.dispose();
+        final flatOutput = await outputFp32.asFlattenedList();
+        outputFp32.dispose();
 
         // flatOutput: [batchLen, 6, 320, 320]
         for (int b = 0; b < batchLen; b++) {
@@ -101,7 +117,6 @@ class SegmentationRunner {
       } finally {
         inputFp32?.dispose();
         inputFp16?.dispose();
-        outputValue?.dispose();
       }
 
       pendingPatchData.clear();
