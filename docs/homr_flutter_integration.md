@@ -293,3 +293,93 @@ Do not start Phase 5 until Phase 4 produces tensor outputs verified against the 
 - Before writing any Dart port, read the corresponding Python source in `../homr/homr/`
 - Write unit tests alongside each module using evaluation-corpus images as fixtures
 - Keep the Python reference pipeline runnable throughout — use it to generate ground truth
+
+---
+
+## Phase 5 design note — simplified staff detection
+
+### Why we are not porting `bounding_boxes.py` + `staff_detection.py`
+
+The Python staff detection pipeline (`staff_detection.py`, 740 lines; `bounding_boxes.py`, 553 lines)
+is complex because it works from **raw pixels**: it must separate staff lines from noteheads, stems,
+barlines, and everything else using only pixel intensity. That forces a chain of:
+
+1. **Morphological erosion/dilation** — removes small blobs (noteheads, stems) to isolate long
+   horizontal lines
+2. **Contour detection + `minAreaRect`** — finds connected pixel regions and fits rotated bounding
+   boxes to capture angle and extent of each line fragment
+3. **`StaffLineSegment` merging** — groups nearby fragments at similar y-positions
+4. **`StaffAnchor` detection** — verifies candidates by requiring exactly 5 parallel segments with
+   equal spacing, distinguishing staves from barlines and bracket lines
+5. **Complex staff assembly** — threads anchors through fragments, handles gaps
+
+None of this is music logic — it is all **pixel-level disambiguation work**.
+
+### What our pipeline already gives us
+
+We work from the **SegNet class-4 semantic mask**. Every pixel labelled class 4 has already been
+declared "staff line" by a neural network trained to distinguish staff lines (class 4) from
+noteheads (class 2), stems/rests (class 1), clefs/keys (class 3), barlines/other (class 5), and
+background (class 0). Steps 1–4 above are a hand-engineered approximation of what SegNet does
+implicitly. We have the output, not the input, of that process.
+
+### Why we skip dewarping
+
+`staff_dewarping.py` (461 lines) applies a piecewise-affine transformation that straightens curved
+staff lines. It is designed for:
+
+- **Book spine curvature** — pages bow toward the binding when a book is laid flat and photographed
+- **Flatbed scanner barrel distortion**
+
+Two things in our pipeline cover both:
+
+1. **OS document scanner** (VisionKit / ML Kit) applies perspective correction and deskew before we
+   ever see the image, handling the gross warp.
+2. **Transformer training augmentation** — `warp_image_array_randomly` in `staff_dewarping.py`
+   warps training images by ±20 px vertical displacement across 5 columns, making the transformer
+   explicitly robust to residual curvature within that envelope.
+
+For a Suzuki Book 1 page held flat under a phone camera, residual bowing after the OS scanner's
+correction is well within the transformer's trained tolerance.
+
+### The simplified approach (`segmentation_postprocessor.dart`)
+
+```
+class-4 mask (H × W)
+  ↓
+rowDensity[y] = count of class-4 pixels in row y      O(H × W)
+  ↓
+find local maxima in rowDensity with:
+  height  ≥ 3% of image width   (rejects noise rows)
+  distance ≥ 3 px               (collapses thick line peaks)
+  ↓
+group maxima: sets of 5 consecutive peaks where
+  all 4 inter-line gaps are within ±30% of their mean
+  AND mean gap ≥ 8 px
+  → unitSize = mean of the 4 gaps
+  ↓
+per staff:
+  yTop    = lineYs[0] − 4 × unitSize   (ledger line + symbol room)
+  yBottom = lineYs[4] + 4 × unitSize
+  xLeft   = 0 / xRight = imageWidth    (full width — one piece per page)
+```
+
+Output: `List<StaffBounds>` sorted top-to-bottom, consumed by the orchestrator to crop staff strips
+and feed each to `TransformerRunner`.
+
+**What we give up vs. the full port, and why it is acceptable:**
+
+| Skipped feature | Needed for | Our situation |
+|---|---|---|
+| Morphological isolation | Separate staff lines from other symbols in raw pixels | SegNet class-4 mask already does this |
+| Contour + `minAreaRect` | Line angle and fragment geometry | OS scanner pre-corrects angle |
+| `StaffAnchor` verification | Reject non-staff horizontals | Class-4 label already means "staff line" |
+| Piecewise-affine dewarp | Book spine curvature | OS scanner + transformer training data covers this |
+| Grand-staff / brace detection | Piano, orchestral scores | Out of scope (Suzuki Book 1) |
+
+### Phase 5 module order
+
+1. `segmentation_postprocessor.dart` — class-4 mask → `List<StaffBounds>` (prerequisite for all else)
+2. Wire orchestrator: crop staff strips, call `TransformerRunner` per staff
+3. `musicxml_assembler.dart` — `List<List<EncodedSymbol>>` → MusicXML string
+   (symbol parsing logic lives inside the assembler; no separate `symbol_classifier.dart` needed)
