@@ -27,11 +27,11 @@ import 'package:homr_flutter/omr_orchestrator.dart';
 const int _refMeasures = 21;
 const int _refNotes = 112;
 
-// Hard lower bounds — pipeline must produce at least this much to be useful.
-// These are intentionally loose: this is a smoke test, not an accuracy test.
-// Accuracy comparison (note-by-note) belongs in Phase 7.
-const int _minMeasures = 5;  // 5 staves → at least 5 barline boundaries
-const int _minNotes = 20;    // 5 staves × 4+ notes each
+// Hard lower bounds calibrated from actual pipeline output (23 measures, 102 notes
+// on iPhone 17 simulator). Set to ~80% of observed to allow hardware variance while
+// catching regressions. Accuracy comparison (note-by-note) belongs in Phase 7.
+const int _minMeasures = 18;  // 80% of 23 observed
+const int _minNotes = 82;     // 80% of 102 observed
 
 // Wall-clock budget for the full pipeline on a cold session (model loading
 // included). Target from the plan is <15 s steady-state; first run on a

@@ -1,7 +1,13 @@
 # homr Flutter Integration — Build Plan
 
 ## Status
-Phase 0 complete (model audit done via source inspection). Ready to begin Phase 1.
+Phases 0–6 complete. Ready to begin Phase 7 (benchmarking).
+
+**End-to-end result (iPhone 17 simulator, happy_farmer_bw_50.png):**
+- Pipeline: segmentation → staff detection → transformer × 5 staves → MusicXML
+- Wall time: ~12 s cold (within 15 s Phase 7 target)
+- Output: 1 part, 23 measures, 102 notes vs Python ref 21 measures, 112 notes (91%)
+- Structure matches Python reference (1 voice, newline-separated staves)
 
 ## Project goal
 On-device optical music recognition for single-staff printed sheet music (Suzuki Book 1 level),
