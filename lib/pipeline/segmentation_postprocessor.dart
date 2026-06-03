@@ -44,13 +44,18 @@ class SegmentationPostprocessor {
   // above scattered noise pixels.
   static const double _heightThresholdFraction = 0.03;
 
-  // Suppress duplicate detections from a staff line that spans 2–3 pixel rows.
-  static const int _minPeakDistance = 3;
+  // Suppress noise peaks that are within this many pixels of a taller neighbour.
+  // Using strict > (not >=) means peaks exactly minDistance apart are kept as
+  // separate lines. Value of 7 merges within-line secondary peaks (typically
+  // 2–6 px gaps from SegNet noise) while preserving 8 px inter-line gaps at
+  // the smallest observed unit sizes.
+  static const int _minPeakDistance = 7;
 
   // A valid staff has 4 inter-line gaps all within this fraction of their mean.
-  // 0.30 (±30 %) is tight enough to reject random coincidences while tolerating
-  // minor SegNet prediction jitter.
-  static const double _spacingTolerance = 0.30;
+  // 0.35 (±35 %) accommodates the full range seen on real scans: the smallest
+  // detected gap (8 px) vs mean (10.75 px) = 25.6 %, well within this bound.
+  // Tightening below 0.30 would cause false rejections on mildly noisy masks.
+  static const double _spacingTolerance = 0.35;
 
   // Reject candidate staves whose unit_size is implausibly small (e.g. two
   // adjacent noise peaks). 8 px corresponds to roughly a 40 px staff height,
@@ -120,7 +125,7 @@ class SegmentationPostprocessor {
     final result = <int>[heightFiltered[0]];
     for (int k = 1; k < heightFiltered.length; k++) {
       final peak = heightFiltered[k];
-      if (peak - result.last >= minDistance) {
+      if (peak - result.last > minDistance) {
         result.add(peak);
       } else if (signal[peak] > signal[result.last]) {
         result[result.length - 1] = peak;

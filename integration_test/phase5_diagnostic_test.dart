@@ -55,6 +55,43 @@ void main() {
         ? fullImage.convert(format: img.Format.uint8, numChannels: 1)
         : img.grayscale(fullImage).convert(format: img.Format.uint8, numChannels: 1);
 
+    // Dump raw row-density peaks (replicate postprocessor logic here for visibility)
+    // ignore: avoid_print
+    print('\nRaw row-density peaks (class-4 pixels per row, top-30):');
+    final density = List<int>.filled(fullImage.height, 0);
+    for (int y = 0; y < fullImage.height; y++) {
+      final base = y * fullImage.width;
+      for (int x = 0; x < fullImage.width; x++) {
+        if (mask[base + x] == 4) density[y]++;
+      }
+    }
+    final minH = (fullImage.width * 0.03).round();
+    // ignore: avoid_print
+    print('  minHeight threshold: $minH (3% of width ${fullImage.width})');
+    final allPeaks = <int>[];
+    for (int i = 1; i < density.length - 1; i++) {
+      if (density[i] > density[i - 1] && density[i] >= density[i + 1] && density[i] >= minH) {
+        allPeaks.add(i);
+      }
+    }
+    // ignore: avoid_print
+    print('  Total peaks above threshold: ${allPeaks.length}');
+    // ignore: avoid_print
+    print('  First 30 peaks: ${allPeaks.take(30).toList()}');
+    // Print density at y=0..200 to see top-stave region
+    // ignore: avoid_print
+    print('\n  Density at y=100..220 (expected top stave):');
+    for (int y = 100; y <= 220; y += 5) {
+      // ignore: avoid_print
+      if (density[y] > 20) print('    y=$y: ${density[y]}');
+    }
+    // ignore: avoid_print
+    print('\n  Density at y=1380..1500 (expected bottom stave):');
+    for (int y = 1380; y <= 1500; y += 5) {
+      // ignore: avoid_print
+      if (density[y] > 20) print('    y=$y: ${density[y]}');
+    }
+
     // Show pixel sample from first staff strip
     final s0 = staves.first;
     // ignore: avoid_print

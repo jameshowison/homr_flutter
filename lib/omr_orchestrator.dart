@@ -81,20 +81,29 @@ class OmrOrchestrator {
         ? fullImage.convert(format: img.Format.uint8, numChannels: 1)
         : img.grayscale(fullImage).convert(format: img.Format.uint8, numChannels: 1);
 
-    final List<List<EncodedSymbol>> allSymbols = [];
+    // Concatenate all staves into one voice, separated by 'newline' tokens.
+    // This matches the Python reference (parse_staffs appends EncodedSymbol("newline")
+    // between staves and passes one flat list per voice to generate_xml).
+    final newline = const EncodedSymbol(
+      rhythm: 'newline', pitch: '.', lift: '.', articulation: '.', position: '.',
+    );
+    final List<EncodedSymbol> voice = [];
     for (final staff in staves) {
       final stripPng = _cropStaffStrip(gray, staff);
       final symbols = await _transformerRunner.runTransformer(stripPng);
-      if (symbols.isNotEmpty) allSymbols.add(symbols);
+      if (symbols.isNotEmpty) {
+        voice.addAll(symbols);
+        voice.add(newline);
+      }
     }
 
-    if (allSymbols.isEmpty) {
+    if (voice.isEmpty) {
       throw const OmrException('Transformer produced no symbols for any staff');
     }
 
     // ── 4. MusicXML assembly ──────────────────────────────────────────────────
     onProgress?.call(OmrStage.assembling);
-    return MusicXmlAssembler.assemble(allSymbols, title: title);
+    return MusicXmlAssembler.assemble([voice], title: title);
   }
 
   /// Crops [gray] to the bounding box defined by [staff] and encodes as PNG.
