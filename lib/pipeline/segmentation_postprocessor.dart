@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'dart:typed_data';
 
 /// Bounding box for one staff strip, ready to crop from the preprocessed image.
@@ -57,11 +56,6 @@ class SegmentationPostprocessor {
   // adjacent noise peaks). 8 px corresponds to roughly a 40 px staff height,
   // which would only occur in extremely low-resolution captures.
   static const int _minUnitSize = 8;
-
-  // Extra padding above/below the outermost staff lines when computing the crop
-  // region. 4 × unitSize provides room for ledger lines (max 4 per side in
-  // homr's constants.py) plus the symbols attached to them.
-  static const double _ledgerLineRoom = 4.0;
 
   /// Returns staves sorted top-to-bottom.
   ///
@@ -140,12 +134,18 @@ class SegmentationPostprocessor {
   // Stave grouping
   // ---------------------------------------------------------------------------
 
-  /// Greedily scans [peaks] for consecutive groups of 5 with consistent spacing.
+  /// Greedily scans [peaks] for consecutive groups of 5 with consistent spacing,
+  /// then sets crop bounds using inter-staff midpoints.
   ///
-  /// Advances by 5 when a valid staff is found, by 1 when not — so a single
-  /// spurious peak between two staves does not corrupt the rest of the page.
+  /// Using midpoints (rather than a fixed ledger-line padding) is critical for
+  /// the transformer: the model was trained on staff strips that fill most of
+  /// the 256 px canvas height. A tight 4×unitSize crop produces a strip only
+  /// ~60 px tall after letterboxing — too small for the model to recognise.
+  /// Midpoint-to-midpoint crops are 200–600 px tall, letterboxing to ~150–256 px,
+  /// which matches the Python reference pipeline's behaviour.
   static List<StaffBounds> _groupIntoStaves(List<int> peaks, int imageHeight, int imageWidth) {
-    final staves = <StaffBounds>[];
+    // Pass 1: collect all valid 5-line groups (lineYs + unitSize only).
+    final List<(List<int>, double)> groups = [];
     int i = 0;
 
     while (i <= peaks.length - 5) {
@@ -163,22 +163,40 @@ class SegmentationPostprocessor {
             gaps.every((g) => (g - meanGap).abs() <= meanGap * _spacingTolerance);
 
         if (allConsistent) {
-          final unitSize = meanGap;
-          final room = (unitSize * _ledgerLineRoom).round();
-          staves.add(StaffBounds(
-            lineYs: [y0, y1, y2, y3, y4],
-            unitSize: unitSize,
-            yTop: max(0, y0 - room),
-            yBottom: min(imageHeight, y4 + room),
-            xLeft: 0,
-            xRight: imageWidth,
-          ));
+          groups.add(([y0, y1, y2, y3, y4], meanGap));
           i += 5;
           continue;
         }
       }
 
       i++;
+    }
+
+    // Pass 2: assign crop bounds using inter-staff midpoints.
+    final staves = <StaffBounds>[];
+    for (int g = 0; g < groups.length; g++) {
+      final (lineYs, unitSize) = groups[g];
+      final y0 = lineYs.first;
+      final y4 = lineYs.last;
+
+      // Top boundary: midpoint to previous staff's bottom line, or image top.
+      final yTop = g == 0
+          ? 0
+          : (groups[g - 1].$1.last + y0) ~/ 2;
+
+      // Bottom boundary: midpoint to next staff's top line, or image bottom.
+      final yBottom = g == groups.length - 1
+          ? imageHeight
+          : (y4 + groups[g + 1].$1.first) ~/ 2;
+
+      staves.add(StaffBounds(
+        lineYs: lineYs,
+        unitSize: unitSize,
+        yTop: yTop,
+        yBottom: yBottom,
+        xLeft: 0,
+        xRight: imageWidth,
+      ));
     }
 
     return staves;

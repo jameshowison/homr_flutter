@@ -166,6 +166,16 @@ class TransformerRunner {
       int lastLift = Vocabulary.nonoteToken;
       int lastArticulation = Vocabulary.nonoteToken;
 
+      // Vocabulary sizes — determined at step 0 from the actual logit tensor
+      // lengths and reused for all subsequent steps. Using length/(step+1) would
+      // be wrong when the decoder output is constant [1,1,C] (KV-cache model):
+      // at step 1 it yields C/2 and points argmax at the middle of the array.
+      int? rhythmVocabSize;
+      int? pitchVocabSize;
+      int? liftVocabSize;
+      int? positionVocabSize;
+      int? articulationVocabSize;
+
       // --- Decoder loop ---
       for (int step = 0; step < _maxSteps; step++) {
         final rhythmInput =
@@ -240,23 +250,26 @@ class TransformerRunner {
 
         decoderOutputs['attention']?.dispose();
 
-        // Argmax at last position
-        final int rhythmClasses = rhythmFlat.length ~/ (step + 1);
-        final int pitchClasses = pitchFlat.length ~/ (step + 1);
-        final int liftClasses = liftFlat.length ~/ (step + 1);
-        final int positionClasses = positionFlat.length ~/ (step + 1);
-        final int articulationClasses = articulationFlat.length ~/ (step + 1);
+        // Vocab sizes: computed once at step 0, reused thereafter.
+        // offset = length - vocabSize selects the LAST sequence position,
+        // which is correct whether the model output is [1,1,C] (constant)
+        // or [1,step+1,C] (accumulating).
+        rhythmVocabSize ??= rhythmFlat.length;
+        pitchVocabSize ??= pitchFlat.length;
+        liftVocabSize ??= liftFlat.length;
+        positionVocabSize ??= positionFlat.length;
+        articulationVocabSize ??= articulationFlat.length;
 
         final int rhythmIdx = _argmax(
-            rhythmFlat, step * rhythmClasses, rhythmClasses);
+            rhythmFlat, rhythmFlat.length - rhythmVocabSize, rhythmVocabSize);
         final int pitchIdx =
-            _argmax(pitchFlat, step * pitchClasses, pitchClasses);
+            _argmax(pitchFlat, pitchFlat.length - pitchVocabSize, pitchVocabSize);
         final int liftIdx =
-            _argmax(liftFlat, step * liftClasses, liftClasses);
-        final int positionIdx =
-            _argmax(positionFlat, step * positionClasses, positionClasses);
-        final int articulationIdx = _argmax(
-            articulationFlat, step * articulationClasses, articulationClasses);
+            _argmax(liftFlat, liftFlat.length - liftVocabSize, liftVocabSize);
+        final int positionIdx = _argmax(
+            positionFlat, positionFlat.length - positionVocabSize, positionVocabSize);
+        final int articulationIdx = _argmax(articulationFlat,
+            articulationFlat.length - articulationVocabSize, articulationVocabSize);
 
         if (rhythmIdx == Vocabulary.eosToken) break;
 

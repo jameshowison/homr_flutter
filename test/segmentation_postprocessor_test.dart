@@ -22,6 +22,7 @@ void main() {
 
     test('detects a single staff from an ideal mask', () {
       // Staff lines at y = 100, 120, 140, 160, 180 → unitSize = 20.
+      // Single staff → crop spans full image height (0..600).
       final lineYs = [100, 120, 140, 160, 180];
       final mask = _buildMask(width, height, lineYs);
 
@@ -31,17 +32,16 @@ void main() {
       final s = staves.first;
       expect(s.lineYs, lineYs);
       expect(s.unitSize, closeTo(20.0, 0.1));
-      // yTop = max(0, 100 - 4*20) = max(0, 20) = 20
-      expect(s.yTop, 20);
-      // yBottom = min(600, 180 + 80) = 260
-      expect(s.yBottom, 260);
+      // Single staff: top=0, bottom=imageHeight (no neighbouring staves)
+      expect(s.yTop, 0);
+      expect(s.yBottom, height);
       expect(s.xLeft, 0);
       expect(s.xRight, width);
     });
 
-    test('detects two staves in the correct top-to-bottom order', () {
-      // First staff: y = 50, 70, 90, 110, 130 → unitSize = 20
-      // Second staff: y = 300, 320, 340, 360, 380 → unitSize = 20
+    test('detects two staves with midpoint crop bounds', () {
+      // Staff 1: y = 50..130, Staff 2: y = 300..380
+      // Midpoint = (130 + 300) / 2 = 215
       final mask = _buildMask(width, height, [50, 70, 90, 110, 130, 300, 320, 340, 360, 380]);
 
       final staves = SegmentationPostprocessor.detectStaves(mask, width, height);
@@ -50,17 +50,24 @@ void main() {
       expect(staves[0].lineYs.first, lessThan(staves[1].lineYs.first));
       expect(staves[0].unitSize, closeTo(20.0, 0.1));
       expect(staves[1].unitSize, closeTo(20.0, 0.1));
+      // Staff 0: yTop=0 (first), yBottom=(130+300)/2=215
+      expect(staves[0].yTop, 0);
+      expect(staves[0].yBottom, (130 + 300) ~/ 2);
+      // Staff 1: yTop=(130+300)/2=215, yBottom=height (last)
+      expect(staves[1].yTop, (130 + 300) ~/ 2);
+      expect(staves[1].yBottom, height);
     });
 
-    test('clamps crop bounds to image edges', () {
-      // Staff lines near the top — yTop would go negative without clamping.
-      final lineYs = [5, 25, 45, 65, 85]; // unitSize = 20, room = 80 → yTop = 5-80 = -75
+    test('single staff crop spans full image height', () {
+      // Staff lines near the top — single staff → crop is 0..imageHeight.
+      final lineYs = [5, 25, 45, 65, 85];
       final mask = _buildMask(width, height, lineYs);
 
       final staves = SegmentationPostprocessor.detectStaves(mask, width, height);
 
       expect(staves.length, 1);
-      expect(staves.first.yTop, 0); // clamped
+      expect(staves.first.yTop, 0);
+      expect(staves.first.yBottom, height);
     });
 
     test('rejects a noisy mask with fewer than 5 peaks', () {
