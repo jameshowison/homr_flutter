@@ -166,10 +166,23 @@ class SegmentationRunner {
 
     await flushBatch();
 
+    // Reconstruct the per-pixel class map with homr's exact semantics
+    // (inference_segnet.py merge_patches + `merged == c`): each patch contributes
+    // its argmax class index; overlapping patches average those indices; a pixel
+    // belongs to class c only when that average equals c exactly. Where patches
+    // disagree the average is non-integer and the pixel belongs to NO class —
+    // homr drops it from every mask. We mirror that with a 255 sentinel rather
+    // than the previous `.round()`, which silently mislabelled ambiguous overlap
+    // pixels (e.g. staff(4)+background(0) → round(2) = notehead).
     return Uint8List.fromList(
       List<int>.generate(H * W, (i) {
-        if (weight[i] == 0.0) return 0;
-        return (reconstructed[i] / weight[i]).round();
+        final wt = weight[i];
+        if (wt == 0.0) return 0;
+        final sum = reconstructed[i];
+        final c = (sum / wt).round();
+        // Exact integer agreement ⇔ sum == c*weight (sums of integer class ids).
+        if (c >= 0 && c <= 5 && (sum - c * wt).abs() < 1e-6) return c;
+        return 255; // ambiguous overlap → no class
       }),
     );
   }
