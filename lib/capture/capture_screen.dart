@@ -101,6 +101,19 @@ class _CaptureScreenState extends State<CaptureScreen> {
                     ),
                     const SizedBox(height: 16),
                   ],
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      'Tip: open the book fully flat and scan both pages '
+                      'together in landscape orientation. The scanner will '
+                      'detect the page boundary — then crop and rotate the '
+                      'result to a single upright page before processing.\n\n'
+                      'Scanning with the spine folded back cuts off clefs on '
+                      'the inner lines, causing staves to be missed.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                   FilledButton.icon(
                     onPressed: _scan,
                     icon: const Icon(Icons.document_scanner),

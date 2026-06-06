@@ -20,6 +20,20 @@ flutter test integration_test/phase5_end_to_end_test.dart
 flutter test integration_test/benchmark_omr_test.dart
 ```
 
+## Book scanning technique
+
+**Open the book fully flat** and scan both pages together in landscape
+orientation, then crop and rotate the result to a single upright page.
+
+Scanning with the spine folded back causes the inner lines of a system to lose
+their clefs (clipped by the binding warp). The pipeline keys staff detection on
+clef presence; clef-less lines are dropped, so only the first/outer staff is
+found. This was confirmed on Suzuki Book 1 song 06 (May Song): 14/44 notes
+detected when scanned folded vs. correct count when scanned flat.
+
+A future implementation task: add in-app rotation/crop UI so the user can
+correct orientation after scanning a two-page spread.
+
 ## Saving test images from the app
 
 The Review Scan screen has a **"Save for testing"** button in debug and profile builds (`!kReleaseMode`). Use **profile mode** to get it on a physical device without needing the Mac attached — iOS 14+ blocks debug builds from launching off the home screen.

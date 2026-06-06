@@ -610,8 +610,10 @@ List<StaffPoint> _resampleSegment(
     // unit, blank both.
     final nonNullIdx = [for (int i = 0; i < axisCenter.length; i++) if (axisCenter[i] != null) i];
     for (int k = 0; k < nonNullIdx.length - 1; k++) {
-      final a = axisCenter[nonNullIdx[k]]!;
-      final b = axisCenter[nonNullIdx[k + 1]]!;
+      // Re-check: a previous iteration may have nullified nonNullIdx[k].
+      final a = axisCenter[nonNullIdx[k]];
+      final b = axisCenter[nonNullIdx[k + 1]];
+      if (a == null || b == null) continue;
       if (b - a < 0.5 * anchor.averageUnitSize) {
         axisCenter[nonNullIdx[k]] = null;
         axisCenter[nonNullIdx[k + 1]] = null;
