@@ -6,8 +6,13 @@
 //   Songs 02/16/17 also have existing no-title phone photos as comparison rows.
 // Excluded: 12-etude (a/b variation is ambiguous as a single ground truth).
 //
+// Scoring uses hierarchical measure-then-note alignment (lib/eval/musicxml_scoring.dart,
+// see docs/omr_evaluation/scoring_approach.md), NOT positional comparison — so a
+// single dropped/extra note no longer cascades into a wrongly-low score, and each
+// case prints exactly which measures diverged.
+//
 // Each result is printed as a TSV row prefixed with RESULT; grep for '^RESULT' to
-// extract data. Run compare_branches.py on two branch outputs to produce summary.md.
+// extract data.
 //
 // Run on a connected device:
 //   flutter test integration_test/suzuki_book1_sweep_test.dart
@@ -23,96 +28,7 @@ import 'package:xml/xml.dart';
 import 'package:integration_test/integration_test.dart';
 
 import 'package:homr_flutter/omr_orchestrator.dart';
-
-// ── Helpers (mirrors benchmark_omr_test.dart) ─────────────────────────────────
-
-class _NoteInfo {
-  final String step;
-  final String? octave;
-  final String duration;
-  final bool isRest;
-  final int alter;
-
-  const _NoteInfo({
-    required this.step,
-    this.octave,
-    required this.duration,
-    required this.isRest,
-    required this.alter,
-  });
-
-  String get pitchStr {
-    if (isRest) return 'R';
-    final acc = alter > 0 ? '#' : (alter < 0 ? 'b' : '');
-    return '$step$acc$octave';
-  }
-}
-
-List<_NoteInfo> _extractNotes(XmlDocument doc) {
-  final notes = <_NoteInfo>[];
-  for (final note in doc.findAllElements('note')) {
-    if (note.findElements('chord').isNotEmpty) continue;
-    final isRest = note.findElements('rest').isNotEmpty;
-    final typeEl = note.findElements('type').firstOrNull;
-    final dur = typeEl?.innerText ?? 'unknown';
-    if (isRest) {
-      notes.add(_NoteInfo(step: 'R', duration: dur, isRest: true, alter: 0));
-    } else {
-      final pitchEl = note.findElements('pitch').firstOrNull;
-      final step = pitchEl?.findElements('step').firstOrNull?.innerText ?? '?';
-      final octave = pitchEl?.findElements('octave').firstOrNull?.innerText;
-      final alterText = pitchEl?.findElements('alter').firstOrNull?.innerText;
-      final alter = alterText != null ? double.parse(alterText).round() : 0;
-      notes.add(_NoteInfo(
-          step: step, octave: octave, duration: dur, isRest: false, alter: alter));
-    }
-  }
-  return notes;
-}
-
-class _CmpResult {
-  final int refCount;
-  final int engineCount;
-  final int compared;
-  final int pitchMatch;
-  final int durMatch;
-  final int bothMatch;
-
-  const _CmpResult({
-    required this.refCount,
-    required this.engineCount,
-    required this.compared,
-    required this.pitchMatch,
-    required this.durMatch,
-    required this.bothMatch,
-  });
-
-  double get pitchPct => compared == 0 ? 0.0 : pitchMatch / compared;
-  double get durPct => compared == 0 ? 0.0 : durMatch / compared;
-  double get bothPct => compared == 0 ? 0.0 : bothMatch / compared;
-}
-
-_CmpResult _compare(List<_NoteInfo> ref, List<_NoteInfo> engine) {
-  final n = ref.length < engine.length ? ref.length : engine.length;
-  int pitchMatch = 0, durMatch = 0, bothMatch = 0;
-  for (int i = 0; i < n; i++) {
-    final r = ref[i];
-    final e = engine[i];
-    final pOk = r.pitchStr == e.pitchStr;
-    final dOk = r.duration == e.duration;
-    if (pOk) pitchMatch++;
-    if (dOk) durMatch++;
-    if (pOk && dOk) bothMatch++;
-  }
-  return _CmpResult(
-    refCount: ref.length,
-    engineCount: engine.length,
-    compared: n,
-    pitchMatch: pitchMatch,
-    durMatch: durMatch,
-    bothMatch: bothMatch,
-  );
-}
+import 'package:homr_flutter/eval/musicxml_scoring.dart';
 
 // ── Song cases ────────────────────────────────────────────────────────────────
 //
@@ -191,6 +107,8 @@ const _cases = [
       'assets/ground_truth/17-gavotte.xml'),
 ];
 
+String _pc(double v) => (v * 100).toStringAsFixed(1);
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 void main() {
@@ -198,7 +116,8 @@ void main() {
 
   // TSV header — grep for lines starting with RESULT to extract data.
   // ignore: avoid_print
-  print('RESULT\tlabel\tnotes_out\tnotes_ref\tpitch_pct\tdur_pct\tboth_pct\ttotal_ms\ttimed_out');
+  print('RESULT\tlabel\tnotes_out\tnotes_ref\tser\tpitch_pct\tdur_pct\tboth_pct'
+      '\tins\tdel\tkey_pct\ttotal_ms\ttimed_out');
 
   for (final tc in _cases) {
     testWidgets('sweep: ${tc.label}',
@@ -214,13 +133,15 @@ void main() {
         pngBytes = imgData.buffer.asUint8List();
       } catch (_) {
         // ignore: avoid_print
-        print('RESULT\t${tc.label}\tSKIP\t-\t-\t-\t-\t-\t-');
+        print('RESULT\t${tc.label}\tSKIP\t-\t-\t-\t-\t-\t-\t-\t-\t-\t-');
         return;
       }
 
-      // ── Load reference XML ─────────────────────────────────────────────────
+      // ── Load + parse reference XML ─────────────────────────────────────────
       final refXml = await rootBundle.loadString(tc.refPath);
-      final refNotes = _extractNotes(XmlDocument.parse(refXml));
+      final refMeasures = parseMeasures(XmlDocument.parse(refXml));
+      final refNoteCount =
+          refMeasures.fold<int>(0, (s, m) => s + m.notes.length);
 
       // ── Run pipeline with per-case timeout ─────────────────────────────────
       final sw = Stopwatch()..start();
@@ -245,38 +166,44 @@ void main() {
 
       if (timedOut || musicXml == null) {
         // ignore: avoid_print
-        print('RESULT\t${tc.label}\t0\t${refNotes.length}\t0.0\t0.0\t0.0\t$totalMs\ttrue');
+        print('RESULT\t${tc.label}\t0\t$refNoteCount\t1.0\t0.0\t0.0\t0.0'
+            '\t0\t$refNoteCount\t0.0\t$totalMs\ttrue');
         // ignore: avoid_print
         print('  [${tc.label}] timed out or failed after $totalMs ms');
         return;
       }
 
-      // ── Parse and compare ──────────────────────────────────────────────────
+      // ── Parse and score ────────────────────────────────────────────────────
       XmlDocument outDoc;
       try {
         outDoc = XmlDocument.parse(musicXml);
       } catch (e) {
         // ignore: avoid_print
-        print('RESULT\t${tc.label}\t0\t${refNotes.length}\t0.0\t0.0\t0.0\t$totalMs\tfalse');
+        print('RESULT\t${tc.label}\t0\t$refNoteCount\t1.0\t0.0\t0.0\t0.0'
+            '\t0\t$refNoteCount\t0.0\t$totalMs\tfalse');
         // ignore: avoid_print
         print('  [${tc.label}] invalid XML output: $e');
         return;
       }
 
-      final outNotes = _extractNotes(outDoc);
-      final cmp = _compare(refNotes, outNotes);
-
-      final pitchPct = (cmp.pitchPct * 100).toStringAsFixed(1);
-      final durPct   = (cmp.durPct   * 100).toStringAsFixed(1);
-      final bothPct  = (cmp.bothPct  * 100).toStringAsFixed(1);
+      final engMeasures = parseMeasures(outDoc);
+      final score = scoreMeasures(refMeasures, engMeasures);
 
       // ignore: avoid_print
-      print('RESULT\t${tc.label}\t${outNotes.length}\t${refNotes.length}'
-          '\t$pitchPct\t$durPct\t$bothPct\t$totalMs\tfalse');
+      print('RESULT\t${tc.label}\t${score.engNotes}\t${score.refNotes}'
+          '\t${_pc(score.ser)}\t${_pc(score.pitchPct)}\t${_pc(score.durPct)}'
+          '\t${_pc(score.bothPct)}\t${score.notes.insertions}'
+          '\t${score.notes.deletions}\t${_pc(score.keyPct)}\t$totalMs\tfalse');
       // ignore: avoid_print
-      print('  [${tc.label}] out=${outNotes.length} ref=${refNotes.length}'
-          '  pitch=$pitchPct%  dur=$durPct%  both=$bothPct%'
+      print('  [${tc.label}] out=${score.engNotes} ref=${score.refNotes}'
+          '  SER=${_pc(score.ser)}%  pitch=${_pc(score.pitchPct)}%'
+          '  dur=${_pc(score.durPct)}%  both=${_pc(score.bothPct)}%'
           '  ${totalMs}ms$slowFlag');
+      // Per-measure drill-down (only printed when something diverged).
+      if (score.measures.any((m) => !m.clean)) {
+        // ignore: avoid_print
+        print(formatReport(score).trimRight());
+      }
     });
   }
 }
