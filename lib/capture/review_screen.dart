@@ -28,7 +28,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     try {
       final bytes = await widget.scanned.readAsBytes();
       final png = await preprocessImage(bytes);
-      if (mounted) setState(() => _thresholdedPng = png);
+      if (mounted) setState(() => _thresholdedPng = png.thresholded);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }

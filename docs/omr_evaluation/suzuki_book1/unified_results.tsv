@@ -1,0 +1,97 @@
+Resolving dependencies...
+Downloading packages...
+  image 4.8.0 (4.9.1 available)
+  matcher 0.12.19 (0.12.20 available)
+  meta 1.18.0 (1.18.3 available)
+  test_api 0.7.11 (0.7.12 available)
+  vector_math 2.2.0 (2.4.0 available)
+  xml 6.6.1 (7.0.1 available)
+Got dependencies!
+6 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+The following plugins do not support Swift Package Manager for ios:
+  - flutter_onnxruntime
+  - flutter_doc_scanner
+This will become an error in a future version of Flutter. Please contact the plugin maintainers to request Swift Package Manager adoption.
+The following plugins do not support Swift Package Manager for macos:
+  - flutter_onnxruntime
+  - flutter_doc_scanner
+This will become an error in a future version of Flutter. Please contact the plugin maintainers to request Swift Package Manager adoption.
+00:00 +0: loading ./integration_test/suzuki_book1_sweep_test.dart
+Running Xcode build...                                          
+Xcode build done.                                           19.3s
+RESULT	label	notes_out	notes_ref	pitch_pct	dur_pct	both_pct	total_ms	timed_out
+00:00 +0: sweep: 01-twinkle
+  [01-twinkle] starting (1/18)
+RESULT	01-twinkle	42	42	100.0	100.0	100.0	5265	false
+  [01-twinkle] out=42 ref=42  pitch=100.0%  dur=100.0%  both=100.0%  5265ms
+00:05 +1: sweep: 02-lightly-row (crop)
+  [02-lightly-row (crop)] starting (2/18)
+RESULT	02-lightly-row (crop)	57	57	100.0	100.0	100.0	6111	false
+  [02-lightly-row (crop)] out=57 ref=57  pitch=100.0%  dur=100.0%  both=100.0%  6111ms
+00:11 +2: sweep: 02-lightly-row (phone2)
+  [02-lightly-row (phone2)] starting (3/18)
+RESULT	02-lightly-row (phone2)	57	57	100.0	100.0	100.0	7597	false
+  [02-lightly-row (phone2)] out=57 ref=57  pitch=100.0%  dur=100.0%  both=100.0%  7597ms
+00:19 +3: sweep: 02-lightly-row (phone-orig)
+  [02-lightly-row (phone-orig)] starting (4/18)
+RESULT	02-lightly-row (phone-orig)	57	57	100.0	100.0	100.0	9469	false
+  [02-lightly-row (phone-orig)] out=57 ref=57  pitch=100.0%  dur=100.0%  both=100.0%  9469ms
+00:28 +4: sweep: 03-song-of-the-wind
+  [03-song-of-the-wind] starting (5/18)
+RESULT	03-song-of-the-wind	49	49	100.0	100.0	100.0	5157	false
+  [03-song-of-the-wind] out=49 ref=49  pitch=100.0%  dur=100.0%  both=100.0%  5157ms
+00:33 +5: sweep: 04-go-tell-aunt-rhody
+  [04-go-tell-aunt-rhody] starting (6/18)
+RESULT	04-go-tell-aunt-rhody	58	58	100.0	100.0	100.0	4431	false
+  [04-go-tell-aunt-rhody] out=58 ref=58  pitch=100.0%  dur=100.0%  both=100.0%  4431ms
+00:38 +6: sweep: 05-o-come-little-children
+  [05-o-come-little-children] starting (7/18)
+RESULT	05-o-come-little-children	48	47	95.7	97.9	95.7	5794	false
+  [05-o-come-little-children] out=48 ref=47  pitch=95.7%  dur=97.9%  both=95.7%  5794ms
+00:44 +7: sweep: 06-may-song
+  [06-may-song] starting (8/18)
+RESULT	06-may-song	44	44	100.0	100.0	100.0	5015	false
+  [06-may-song] out=44 ref=44  pitch=100.0%  dur=100.0%  both=100.0%  5015ms
+00:49 +8: sweep: 07-long-long-ago
+  [07-long-long-ago] starting (9/18)
+RESULT	07-long-long-ago	74	74	100.0	100.0	100.0	7640	false
+  [07-long-long-ago] out=74 ref=74  pitch=100.0%  dur=100.0%  both=100.0%  7640ms
+00:56 +9: sweep: 08-allegro
+  [08-allegro] starting (10/18)
+RESULT	08-allegro	72	72	100.0	100.0	100.0	6078	false
+  [08-allegro] out=72 ref=72  pitch=100.0%  dur=100.0%  both=100.0%  6078ms
+01:02 +10: sweep: 09-perpetual-motion
+  [09-perpetual-motion] starting (11/18)
+RESULT	09-perpetual-motion	128	128	100.0	100.0	100.0	8186	false
+  [09-perpetual-motion] out=128 ref=128  pitch=100.0%  dur=100.0%  both=100.0%  8186ms
+01:11 +11: sweep: 10-allegretto
+  [10-allegretto] starting (12/18)
+RESULT	10-allegretto	92	94	40.2	51.1	29.3	7025	false
+  [10-allegretto] out=92 ref=94  pitch=40.2%  dur=51.1%  both=29.3%  7025ms
+01:18 +12: sweep: 11-andantino
+  [11-andantino] starting (13/18)
+RESULT	11-andantino	76	76	100.0	100.0	100.0	6864	false
+  [11-andantino] out=76 ref=76  pitch=100.0%  dur=100.0%  both=100.0%  6864ms
+01:25 +13: sweep: 13-minuet-no-1
+  [13-minuet-no-1] starting (14/18)
+RESULT	13-minuet-no-1	82	82	100.0	100.0	100.0	10431	false
+  [13-minuet-no-1] out=82 ref=82  pitch=100.0%  dur=100.0%  both=100.0%  10431ms
+01:35 +14: sweep: 14-minuet-no-2
+  [14-minuet-no-2] starting (15/18)
+RESULT	14-minuet-no-2	167	167	100.0	98.8	98.8	17206	false
+  [14-minuet-no-2] out=167 ref=167  pitch=100.0%  dur=98.8%  both=98.8%  17206ms
+01:52 +15: sweep: 15-minuet-no-3
+  [15-minuet-no-3] starting (16/18)
+RESULT	15-minuet-no-3	127	127	100.0	100.0	100.0	13464	false
+  [15-minuet-no-3] out=127 ref=127  pitch=100.0%  dur=100.0%  both=100.0%  13464ms
+02:06 +16: sweep: 16-happy-farmer (phone)
+  [16-happy-farmer (phone)] starting (17/18)
+RESULT	16-happy-farmer (phone)	112	112	100.0	100.0	100.0	11023	false
+  [16-happy-farmer (phone)] out=112 ref=112  pitch=100.0%  dur=100.0%  both=100.0%  11023ms
+02:17 +17: sweep: 17-gavotte (phone)
+  [17-gavotte (phone)] starting (18/18)
+RESULT	17-gavotte (phone)	193	192	26.6	74.5	20.8	15401	false
+  [17-gavotte (phone)] out=193 ref=192  pitch=26.6%  dur=74.5%  both=20.8%  15401ms
+02:32 +18: (tearDownAll)
+02:34 +18: All tests passed!

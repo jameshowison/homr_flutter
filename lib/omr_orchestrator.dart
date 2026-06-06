@@ -8,8 +8,8 @@ import 'inference/segmentation_runner.dart';
 import 'inference/transformer_runner.dart';
 import 'pipeline/homr/predictions.dart';
 import 'pipeline/homr/staff_detection.dart' as homr;
+import 'pipeline/homr/staff_parsing.dart';
 import 'pipeline/musicxml_assembler.dart';
-import 'pipeline/staff_dewarper.dart';
 
 /// Discrete pipeline stages reported via [OmrOrchestrator.recognise] progress
 /// callback.
@@ -136,10 +136,6 @@ class OmrOrchestrator {
     // ── 3. Transformer per staff ──────────────────────────────────────────────
     onProgress?.call(OmrStage.recognising);
 
-    // Staff strips are cropped from the CLAHE image (same as Python pipeline).
-    // claheImage is already single-channel uint8 — no further conversion needed.
-    final gray = claheImage;
-
     // Concatenate all staves into one voice, separated by 'newline' tokens.
     // This matches the Python reference (parse_staffs appends EncodedSymbol("newline")
     // between staves and passes one flat list per voice to generate_xml).
@@ -147,20 +143,16 @@ class OmrOrchestrator {
       rhythm: 'newline', pitch: '.', lift: '.', articulation: '.', position: '.',
     );
     final List<EncodedSymbol> voice = [];
-    for (int si = 0; si < crops.length; si++) {
-      final crop = crops[si];
-      // Crop the full-width staff strip, then dewarp to straighten book-spine
-      // curvature (using the homr grid's middle line) before the transformer.
-      final strip = img.copyCrop(gray,
-          x: 0, y: crop.yTop, width: imgW, height: crop.yBottom - crop.yTop);
-      final dewarped = dewarpStaffStrip(strip, crop.profile);
-      final stripPng = img.encodePng(dewarped);
+    for (int si = 0; si < staves.length; si++) {
+      // homr staff_parsing: tight region crop (±2u x, ±4u y, neighbour-clamped),
+      // 1-D middle-line dewarp, then resize+centre onto a 256×1280 canvas — the
+      // exact transformer input format. The transformer's own letterbox is then
+      // an identity no-op.
+      final canvas = prepareStaffImage(claheImage, staves[si], staves);
+      final stripPng = img.encodePng(canvas);
 
       if (artifactDir != null) {
-        File('$artifactDir/staff_${si}_raw.png')
-            .writeAsBytesSync(img.encodePng(strip));
-        File('$artifactDir/staff_${si}_dewarped.png')
-            .writeAsBytesSync(stripPng);
+        File('$artifactDir/staff_${si}_input.png').writeAsBytesSync(stripPng);
       }
 
       final symbols = await _transformerRunner.runTransformer(stripPng);
