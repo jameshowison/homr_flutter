@@ -21,7 +21,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:xml/xml.dart';
 
-import 'package:homr_flutter/omr_orchestrator.dart';
+import 'package:homr_omr/homr_omr.dart';
 
 // Python reference counts — used for diagnostic output only, not hard assertions.
 const int _refMeasures = 21;

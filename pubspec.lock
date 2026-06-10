@@ -132,7 +132,7 @@ packages:
     source: hosted
     version: "6.0.0"
   flutter_onnxruntime:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: flutter_onnxruntime
       sha256: bd415ae793558f008c6a2b5bc0ec3c4e2a872d8f536c845c34fbf0a726c2d6b9
@@ -154,6 +154,13 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  homr_omr:
+    dependency: "direct main"
+    description:
+      path: "packages/homr_omr"
+      relative: true
+    source: path
+    version: "1.0.0"
   hooks:
     dependency: transitive
     description:

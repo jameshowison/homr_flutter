@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
-import '../lib/pipeline/homr/bounding_boxes.dart';
+import '../packages/homr_omr/lib/src/pipeline/homr/bounding_boxes.dart';
 
 // Validates the Dart fragment-extraction port against homr's oracle dump.
 // Usage: dart run tool/validate_fragments.dart <tag>

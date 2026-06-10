@@ -1,7 +1,7 @@
-import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:image/image.dart' as img;
 
 const int _targetWidth = 1920;
@@ -13,7 +13,7 @@ typedef PreprocessResult = ({Uint8List original, Uint8List thresholded});
 ///   original    — resized full-colour (before any thresholding)
 ///   thresholded — grayscale + binary threshold at [_thresholdValue]
 Future<PreprocessResult> preprocessImage(Uint8List jpegBytes) {
-  return Isolate.run(() => _process(jpegBytes));
+  return compute(_process, jpegBytes);
 }
 
 PreprocessResult _process(Uint8List jpegBytes) {
@@ -140,6 +140,36 @@ img.Image applyClahe(
     }
   }
 
+  return img.Image.fromBytes(
+    width: W,
+    height: H,
+    bytes: outBytes.buffer,
+    format: img.Format.uint8,
+    numChannels: 1,
+    order: img.ChannelOrder.red,
+  );
+}
+
+/// Whitens all pixels with luminance above [threshold] (0–255).
+///
+/// Pencil marks on white paper typically scan at 160–220 gray; printed ink
+/// sits at 0–60. Forcing the band above [threshold] to 255 before CLAHE
+/// suppresses pencil annotations without touching the ink.
+///
+/// Returns a new single-channel uint8 image; [source] is not modified.
+img.Image eraseLightPixels(img.Image source, {int threshold = 190}) {
+  final W = source.width;
+  final H = source.height;
+  final gray = (source.numChannels == 1 && source.format == img.Format.uint8)
+      ? source
+      : img.grayscale(source).convert(format: img.Format.uint8, numChannels: 1);
+  final outBytes = Uint8List(W * H);
+  for (int y = 0; y < H; y++) {
+    for (int x = 0; x < W; x++) {
+      final v = gray.getPixel(x, y).r.toInt();
+      outBytes[y * W + x] = v > threshold ? 255 : v;
+    }
+  }
   return img.Image.fromBytes(
     width: W,
     height: H,

@@ -1,7 +1,7 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
+import 'artifact_writer.dart';
 import 'capture/image_preprocessor.dart' show applyClahe, claheGrayToRgb, eraseLightPixels;
 import 'inference/encoded_symbol.dart';
 import 'inference/segmentation_runner.dart';
@@ -68,6 +68,8 @@ class OmrOrchestrator {
     String? artifactDir,
     int? pencilGateThreshold,
   }) async {
+    final writer = ArtifactWriter.maybeCreate(artifactDir);
+
     // Decode once; used for CLAHE, dimensions, and transformer crops.
     final fullImage = img.decodeImage(preprocessedPng);
     if (fullImage == null) throw const OmrException('Failed to decode preprocessed PNG');
@@ -79,11 +81,7 @@ class OmrOrchestrator {
     final img.Image claheInput;
     if (pencilGateThreshold != null) {
       final gated = eraseLightPixels(fullImage, threshold: pencilGateThreshold);
-      if (artifactDir != null) {
-        Directory(artifactDir).createSync(recursive: true);
-        File('$artifactDir/pencil_gate.png')
-            .writeAsBytesSync(img.encodePng(claheGrayToRgb(gated)));
-      }
+      writer?.writeBytes('pencil_gate.png', img.encodePng(claheGrayToRgb(gated)));
       claheInput = gated;
     } else {
       claheInput = fullImage;
@@ -108,10 +106,7 @@ class OmrOrchestrator {
     final claheImage = claheGrayToRgb(claheGray);
     final clahePng = img.encodePng(claheImage);
 
-    if (artifactDir != null) {
-      Directory(artifactDir).createSync(recursive: true);
-      File('$artifactDir/clahe.png').writeAsBytesSync(clahePng);
-    }
+    writer?.writeBytes('clahe.png', clahePng);
 
     // ── 1. Segmentation (CLAHE grayscale input) ───────────────────────────────
     onProgress?.call(OmrStage.segmenting);
@@ -128,7 +123,7 @@ class OmrOrchestrator {
     }
     final crops = staffCropRegions(staves, imgW, imgH);
 
-    if (artifactDir != null) {
+    if (writer != null) {
       // Render class-4 (staff-line) pixels as white on black for inspection.
       final maskBytes = Uint8List(imgW * imgH);
       for (int i = 0; i < classMask.length; i++) {
@@ -142,13 +137,11 @@ class OmrOrchestrator {
         numChannels: 1,
         order: img.ChannelOrder.red,
       );
-      File('$artifactDir/mask_class4.png')
-          .writeAsBytesSync(img.encodePng(maskImg));
+      writer.writeBytes('mask_class4.png', img.encodePng(maskImg));
 
       // Teaser: CLAHE image with each detected staff's grid lines and crop
       // region overlaid in a distinct colour — mirrors Python homr's _teaser.png.
-      File('$artifactDir/teaser.png').writeAsBytesSync(
-          _generateTeaser(claheImage, staves, crops));
+      writer.writeBytes('teaser.png', _generateTeaser(claheImage, staves, crops));
     }
 
     // ── 3. Transformer per staff ──────────────────────────────────────────────
@@ -169,12 +162,10 @@ class OmrOrchestrator {
       final canvas = prepareStaffImage(claheImage, staves[si], staves);
       final stripPng = img.encodePng(canvas);
 
-      if (artifactDir != null) {
-        File('$artifactDir/staff_${si}_input.png').writeAsBytesSync(stripPng);
-      }
+      writer?.writeBytes('staff_${si}_input.png', stripPng);
 
-      final liftDebug = artifactDir != null ? <String>[] : null;
-      final rhythmDebug = artifactDir != null ? <String>[] : null;
+      final liftDebug = writer != null ? <String>[] : null;
+      final rhythmDebug = writer != null ? <String>[] : null;
       final symbols = await _transformerRunner.runTransformer(stripPng,
           liftDebug: liftDebug, rhythmDebug: rhythmDebug);
       if (symbols.isNotEmpty) {
@@ -182,22 +173,20 @@ class OmrOrchestrator {
         voice.add(newline);
       }
 
-      if (artifactDir != null && liftDebug != null) {
+      if (writer != null && liftDebug != null) {
         final lines = [
           for (int i = 0; i < symbols.length; i++)
             '${symbols[i].rhythm}|${symbols[i].pitch}|${symbols[i].lift}\t${liftDebug[i]}',
         ];
-        File('$artifactDir/staff_${si}_lift_debug.txt')
-            .writeAsStringSync(lines.join('\n'));
+        writer.writeString('staff_${si}_lift_debug.txt', lines.join('\n'));
       }
 
-      if (artifactDir != null && rhythmDebug != null) {
+      if (writer != null && rhythmDebug != null) {
         final lines = [
           for (int i = 0; i < symbols.length; i++)
             '${symbols[i].rhythm}|${symbols[i].pitch}|${symbols[i].lift}\t${rhythmDebug[i]}',
         ];
-        File('$artifactDir/staff_${si}_rhythm_debug.txt')
-            .writeAsStringSync(lines.join('\n'));
+        writer.writeString('staff_${si}_rhythm_debug.txt', lines.join('\n'));
       }
     }  // end for staves
 
@@ -205,10 +194,10 @@ class OmrOrchestrator {
       throw const OmrException('Transformer produced no symbols for any staff');
     }
 
-    if (artifactDir != null) {
+    if (writer != null) {
       // One token per line: rhythm|pitch|lift — lets you grep for barline runs.
       final tokens = voice.map((s) => '${s.rhythm}|${s.pitch}|${s.lift}').join('\n');
-      File('$artifactDir/tokens.txt').writeAsStringSync(tokens);
+      writer.writeString('tokens.txt', tokens);
     }
 
     // ── 4. MusicXML assembly ──────────────────────────────────────────────────

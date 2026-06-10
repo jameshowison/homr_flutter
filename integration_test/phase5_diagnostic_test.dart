@@ -1,13 +1,14 @@
 // Diagnostic test — prints internal pipeline state to find what's wrong.
 // Run on simulator: flutter test integration_test/phase5_diagnostic_test.dart
+// ignore_for_file: implementation_imports
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:image/image.dart' as img;
 
-import 'package:homr_flutter/inference/segmentation_runner.dart';
-import 'package:homr_flutter/inference/transformer_runner.dart';
-import 'package:homr_flutter/pipeline/segmentation_postprocessor.dart';
+import 'package:homr_omr/src/inference/segmentation_runner.dart';
+import 'package:homr_omr/src/inference/transformer_runner.dart';
+import 'package:homr_omr/src/pipeline/segmentation_postprocessor.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();

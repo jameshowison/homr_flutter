@@ -1,7 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:homr_flutter/pipeline/segmentation_postprocessor.dart';
+// ignore: implementation_imports
+import 'package:homr_omr/src/pipeline/segmentation_postprocessor.dart';
 
 /// Builds a synthetic H×W class mask with class-4 pixels painted as thin
 /// horizontal lines at the given y-positions.

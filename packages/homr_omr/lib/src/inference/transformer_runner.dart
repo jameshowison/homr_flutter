@@ -8,9 +8,9 @@ import 'vocabulary.dart';
 
 class TransformerRunner {
   static const String _encoderAsset =
-      'assets/models/encoder_pytorch_model_367-575b4737bca815d3a7b37169269fc548d7e945b9_fp16.onnx';
+      'packages/homr_omr/assets/models/encoder_pytorch_model_367-575b4737bca815d3a7b37169269fc548d7e945b9_fp16.onnx';
   static const String _decoderAsset =
-      'assets/models/decoder_pytorch_model_367-575b4737bca815d3a7b37169269fc548d7e945b9_fp16.onnx';
+      'packages/homr_omr/assets/models/decoder_pytorch_model_367-575b4737bca815d3a7b37169269fc548d7e945b9_fp16.onnx';
 
   static const int _encoderH = 256;
   static const int _encoderW = 1280;

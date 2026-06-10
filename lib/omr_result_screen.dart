@@ -2,10 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:homr_omr/homr_omr.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'capture/crop_screen.dart';
-import 'omr_orchestrator.dart';
 
 class OmrResultScreen extends StatefulWidget {
   const OmrResultScreen({super.key, required this.cropResult});

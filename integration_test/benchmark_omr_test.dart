@@ -3,7 +3,7 @@
 // Runs all three evaluation images through the full OMR pipeline and reports:
 //   - Per-stage timing (segmenting / detecting / recognising / assembling)
 //   - Note-level accuracy vs Python reference output (pitch + duration,
-//     positional comparison matching compare_omr.py methodology)
+//     alignment-based scoring — see lib/eval/musicxml_scoring.dart)
 //
 // Ground-truth files are the Python homr reference outputs stored in
 // assets/ground_truth/; accuracy floors are conservative — tighten after
@@ -18,10 +18,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:integration_test/integration_test.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:xml/xml.dart';
 
-import 'package:homr_flutter/omr_orchestrator.dart';
+import 'package:homr_omr/homr_omr.dart';
+import 'package:homr_flutter/eval/musicxml_scoring.dart';
 
 // ── Test-case descriptors ─────────────────────────────────────────────────────
 
@@ -29,15 +29,13 @@ class _Case {
   final String label;
   final String imagePath;
   final String refPath;
-  final int refNotes;          // Python reference note count (from results.md)
-  final int minNotesFloor;     // ≥ 50% of ref — catches catastrophic failure
-  final double minBothFloor;   // minimum pitch+duration positional accuracy
+  final int minNotesFloor;   // ≥ this many engine notes — catches catastrophic failure
+  final double minBothFloor; // minimum pitch+duration agreement over aligned pairs
 
   const _Case({
     required this.label,
     required this.imagePath,
     required this.refPath,
-    required this.refNotes,
     required this.minNotesFloor,
     required this.minBothFloor,
   });
@@ -53,7 +51,6 @@ const _cases = [
     label: 'Happy Farmer',
     imagePath: 'assets/test_images/happy_farmer_notes.png',
     refPath: 'assets/ground_truth/happy_farmer_bw_50.musicxml',
-    refNotes: 112,
     minNotesFloor: 108,  // observed 112/112 detected
     minBothFloor: 0.90,  // observed 97.3%
   ),
@@ -62,7 +59,6 @@ const _cases = [
     label: 'Lightly Row 2',
     imagePath: 'assets/test_images/lightly_row2_notes.png',
     refPath: 'assets/ground_truth/lightly_row_no_title.musicxml',
-    refNotes: 57,
     minNotesFloor: 54,
     minBothFloor: 0.90,  // was unstable 68–100%; now stably 100% across runs
   ),
@@ -70,7 +66,6 @@ const _cases = [
     label: 'Lightly Row (original)',
     imagePath: 'assets/test_images/lightly_row_notes.png',
     refPath: 'assets/ground_truth/lightly_row_no_title.musicxml',
-    refNotes: 57,
     minNotesFloor: 54,   // was ~13% "known-bad photo"; homr detection now 100%
     minBothFloor: 0.90,
   ),
@@ -78,7 +73,6 @@ const _cases = [
     label: 'Gavotte',
     imagePath: 'assets/test_images/gavotte_notes.png',
     refPath: 'assets/ground_truth/gossec_gavotte_bw.musicxml',
-    refNotes: 193,
     minNotesFloor: 185,
     minBothFloor: 0.90,  // observed 97.9%
   ),
@@ -94,15 +88,13 @@ const _claheImageCases = [
     label: 'Happy Farmer (py-clahe)',
     imagePath: 'assets/test_images/happy_farmer_notes_clahe.png',
     refPath: 'assets/ground_truth/happy_farmer_bw_50.musicxml',
-    refNotes: 112,
     minNotesFloor: 80,   // 4 staves of ~5 detected; ~88 notes
-    minBothFloor: 0.45,  // cascading positional mismatches after missing staff
+    minBothFloor: 0.45,  // conservative; missing staff is a deletion, not cascade
   ),
   _Case(
     label: 'Lightly Row (py-clahe)',
     imagePath: 'assets/test_images/lightly_row_notes_clahe.png',
     refPath: 'assets/ground_truth/lightly_row_no_title.musicxml',
-    refNotes: 57,
     minNotesFloor: 30,
     minBothFloor: 0.10,
   ),
@@ -110,7 +102,6 @@ const _claheImageCases = [
     label: 'Lightly Row 2 (py-clahe)',
     imagePath: 'assets/test_images/lightly_row2_notes_clahe.png',
     refPath: 'assets/ground_truth/lightly_row_no_title.musicxml',
-    refNotes: 57,
     minNotesFloor: 30,
     minBothFloor: 0.10,
   ),
@@ -118,119 +109,10 @@ const _claheImageCases = [
     label: 'Gavotte (py-clahe)',
     imagePath: 'assets/test_images/gavotte_notes_clahe.png',
     refPath: 'assets/ground_truth/gossec_gavotte_bw.musicxml',
-    refNotes: 193,
     minNotesFloor: 154,
     minBothFloor: 0.85,
   ),
 ];
-
-// ── Note extraction (mirrors compare_omr.py extract_notes) ───────────────────
-
-class _NoteInfo {
-  final String step;     // note letter (A–G) or 'R' for rest
-  final String? octave;
-  final String duration; // MusicXML <type> string, e.g. 'quarter', 'eighth'
-  final bool isRest;
-  final int alter;       // -2=bb, -1=b, 0=natural, 1=#, 2=##
-
-  const _NoteInfo({
-    required this.step,
-    this.octave,
-    required this.duration,
-    required this.isRest,
-    required this.alter,
-  });
-
-  String get pitchStr {
-    if (isRest) return 'R';
-    final acc = alter > 0 ? '#' : (alter < 0 ? 'b' : '');
-    return '$step$acc$octave';
-  }
-}
-
-List<_NoteInfo> _extractNotes(XmlDocument doc) {
-  final notes = <_NoteInfo>[];
-  for (final note in doc.findAllElements('note')) {
-    // Skip secondary chord notes (same as Python: skip if <chord> present).
-    if (note.findElements('chord').isNotEmpty) continue;
-
-    final isRest = note.findElements('rest').isNotEmpty;
-    final typeEl = note.findElements('type').firstOrNull;
-    final dur = typeEl?.innerText ?? 'unknown';
-
-    if (isRest) {
-      notes.add(_NoteInfo(step: 'R', duration: dur, isRest: true, alter: 0));
-    } else {
-      final pitchEl = note.findElements('pitch').firstOrNull;
-      final step = pitchEl?.findElements('step').firstOrNull?.innerText ?? '?';
-      final octave = pitchEl?.findElements('octave').firstOrNull?.innerText;
-      final alterText = pitchEl?.findElements('alter').firstOrNull?.innerText;
-      final alter = alterText != null ? double.parse(alterText).round() : 0;
-      notes.add(_NoteInfo(
-          step: step, octave: octave, duration: dur, isRest: false, alter: alter));
-    }
-  }
-  return notes;
-}
-
-// ── Comparison ────────────────────────────────────────────────────────────────
-
-class _CmpResult {
-  final int refCount;
-  final int engineCount;
-  final int compared;
-  final int pitchMatch;
-  final int durMatch;
-  final int bothMatch;
-  final List<String> mismatches; // first 20 human-readable
-
-  const _CmpResult({
-    required this.refCount,
-    required this.engineCount,
-    required this.compared,
-    required this.pitchMatch,
-    required this.durMatch,
-    required this.bothMatch,
-    required this.mismatches,
-  });
-
-  int get extra => (engineCount - refCount).abs();
-  double get pitchPct => compared == 0 ? 0.0 : pitchMatch / compared;
-  double get durPct => compared == 0 ? 0.0 : durMatch / compared;
-  double get bothPct => compared == 0 ? 0.0 : bothMatch / compared;
-}
-
-_CmpResult _compare(List<_NoteInfo> ref, List<_NoteInfo> engine) {
-  final n = ref.length < engine.length ? ref.length : engine.length;
-  int pitchMatch = 0, durMatch = 0, bothMatch = 0;
-  final mismatches = <String>[];
-
-  for (int i = 0; i < n; i++) {
-    final r = ref[i];
-    final e = engine[i];
-    final pOk = r.pitchStr == e.pitchStr;
-    final dOk = r.duration == e.duration;
-    if (pOk) pitchMatch++;
-    if (dOk) durMatch++;
-    if (pOk && dOk) {
-      bothMatch++;
-    } else if (mismatches.length < 20) {
-      final pitchFlag = pOk ? '' : 'PITCH(${r.pitchStr}→${e.pitchStr})';
-      final durFlag = dOk ? '' : 'DUR(${r.duration}→${e.duration})';
-      mismatches.add('[${i + 1}] $pitchFlag $durFlag'.trim());
-    }
-  }
-
-  return _CmpResult(
-    refCount: ref.length,
-    engineCount: engine.length,
-    compared: n,
-    pitchMatch: pitchMatch,
-    durMatch: durMatch,
-    bothMatch: bothMatch,
-    mismatches: mismatches,
-  );
-}
 
 // ── Per-stage timing ──────────────────────────────────────────────────────────
 
@@ -284,6 +166,8 @@ Uint8List _applyThreshold(Uint8List pngBytes, int threshold) {
   return img.encodePng(gray);
 }
 
+String _pc(double v) => (v * 100).toStringAsFixed(1);
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 void main() {
@@ -301,7 +185,7 @@ void main() {
       final pngBytes = imgData.buffer.asUint8List();
 
       final refXml = await rootBundle.loadString(tc.refPath);
-      final refNotes = _extractNotes(XmlDocument.parse(refXml));
+      final refMeasures = parseMeasures(XmlDocument.parse(refXml));
 
       // ── Run pipeline with per-stage timing ──────────────────────────────────
       final sw = Stopwatch()..start();
@@ -326,7 +210,7 @@ void main() {
         sw.stop();
       }
 
-      // ── Parse output and compare ─────────────────────────────────────────────
+      // ── Parse output and score ─────────────────────────────────────────────
       late XmlDocument outDoc;
       try {
         outDoc = XmlDocument.parse(musicXml);
@@ -335,10 +219,8 @@ void main() {
             '${musicXml.substring(0, musicXml.length.clamp(0, 500))}');
       }
 
-      final outNotes = _extractNotes(outDoc);
-      final cmp = _compare(refNotes, outNotes);
-      final measures = outDoc.findAllElements('measure').length;
-      final parts = outDoc.findAllElements('part').length;
+      final engMeasures = parseMeasures(outDoc);
+      final score = scoreMeasures(refMeasures, engMeasures);
 
       // ── Detailed report ──────────────────────────────────────────────────────
       // ignore: avoid_print
@@ -361,43 +243,39 @@ void main() {
       // ignore: avoid_print
       print('');
       // ignore: avoid_print
-      print('  ${'Metric'.padRight(12)} ${'Ours'.padLeft(8)} ${'Python ref'.padLeft(10)}');
+      print('  ${'Metric'.padRight(12)} ${'Ours'.padLeft(8)} ${'Ref'.padLeft(10)}');
       // ignore: avoid_print
       print('  ${'-' * 32}');
       // ignore: avoid_print
-      print('  ${'Parts'.padRight(12)} ${parts.toString().padLeft(8)}');
-      // ignore: avoid_print
-      print('  ${'Measures'.padRight(12)} ${measures.toString().padLeft(8)}');
+      print('  ${'Measures'.padRight(12)} '
+          '${score.engMeasures.toString().padLeft(8)} '
+          '${score.refMeasures.toString().padLeft(10)}');
       // ignore: avoid_print
       print('  ${'Notes'.padRight(12)} '
-          '${outNotes.length.toString().padLeft(8)} '
-          '${refNotes.length.toString().padLeft(10)}');
+          '${score.engNotes.toString().padLeft(8)} '
+          '${score.refNotes.toString().padLeft(10)}');
       // ignore: avoid_print
       print('');
       // ignore: avoid_print
-      print('  Accuracy vs Python reference (positional):');
+      print('  Accuracy (alignment-based):');
       // ignore: avoid_print
-      print('    Pitch:    ${cmp.pitchMatch}/${cmp.compared} = '
-          '${(cmp.pitchPct * 100).toStringAsFixed(1)}%');
+      print('    SER:      ${_pc(score.ser)}%');
       // ignore: avoid_print
-      print('    Duration: ${cmp.durMatch}/${cmp.compared} = '
-          '${(cmp.durPct * 100).toStringAsFixed(1)}%');
+      print('    Pitch:    ${_pc(score.pitchPct)}%');
       // ignore: avoid_print
-      print('    Both:     ${cmp.bothMatch}/${cmp.compared} = '
-          '${(cmp.bothPct * 100).toStringAsFixed(1)}%  '
-          '(floor: ${(tc.minBothFloor * 100).toStringAsFixed(0)}%)');
+      print('    Duration: ${_pc(score.durPct)}%');
       // ignore: avoid_print
-      print('    Extra/missing notes: ${cmp.extra}');
+      print('    Both:     ${_pc(score.bothPct)}%  '
+          '(floor: ${_pc(tc.minBothFloor)}%)');
+      // ignore: avoid_print
+      print('    ins=${score.notes.insertions} del=${score.notes.deletions}  '
+          'measure ins=${score.measureInsertions} del=${score.measureDeletions}');
 
-      if (cmp.mismatches.isNotEmpty) {
+      if (score.measures.any((m) => !m.clean)) {
         // ignore: avoid_print
         print('');
         // ignore: avoid_print
-        print('  First ${cmp.mismatches.length} mismatches:');
-        for (final m in cmp.mismatches) {
-          // ignore: avoid_print
-          print('    $m');
-        }
+        print(formatReport(score).trimRight());
       }
 
       // ── Assertions ───────────────────────────────────────────────────────────
@@ -408,18 +286,18 @@ void main() {
       );
 
       expect(
-        outNotes.length,
+        score.engNotes,
         greaterThanOrEqualTo(tc.minNotesFloor),
-        reason: '${tc.label}: got ${outNotes.length} notes, '
-            'expected ≥${tc.minNotesFloor} (ref: ${tc.refNotes})',
+        reason: '${tc.label}: got ${score.engNotes} notes, '
+            'expected ≥${tc.minNotesFloor} (ref: ${score.refNotes})',
       );
 
       expect(
-        cmp.bothPct,
+        score.bothPct,
         greaterThanOrEqualTo(tc.minBothFloor),
         reason: '${tc.label}: pitch+duration accuracy '
-            '${(cmp.bothPct * 100).toStringAsFixed(1)}% '
-            'below ${(tc.minBothFloor * 100).toStringAsFixed(0)}% floor',
+            '${_pc(score.bothPct)}% '
+            'below ${_pc(tc.minBothFloor)} floor',
       );
 
       expect(
@@ -444,7 +322,7 @@ void main() {
       final imgData = await rootBundle.load(tc.imagePath);
       final pngBytes = imgData.buffer.asUint8List();
       final refXml = await rootBundle.loadString(tc.refPath);
-      final refNotes = _extractNotes(XmlDocument.parse(refXml));
+      final refMeasures = parseMeasures(XmlDocument.parse(refXml));
 
       late String musicXml;
       try {
@@ -459,18 +337,19 @@ void main() {
       }
 
       final outDoc = XmlDocument.parse(musicXml);
-      final outNotes = _extractNotes(outDoc);
-      final cmp = _compare(refNotes, outNotes);
+      final engMeasures = parseMeasures(outDoc);
+      final score = scoreMeasures(refMeasures, engMeasures);
 
       // ignore: avoid_print
       print('\n[PY-CLAHE] ${tc.label}: '
-          '${outNotes.length} notes / ${(cmp.bothPct * 100).toStringAsFixed(1)}%');
+          '${score.engNotes} notes / SER=${_pc(score.ser)}% '
+          'both=${_pc(score.bothPct)}%');
 
-      expect(outNotes.length, greaterThanOrEqualTo(tc.minNotesFloor),
-          reason: '${tc.label}: ${outNotes.length} notes < floor ${tc.minNotesFloor}');
-      expect(cmp.bothPct, greaterThanOrEqualTo(tc.minBothFloor),
-          reason: '${tc.label}: ${(cmp.bothPct * 100).toStringAsFixed(1)}% '
-              '< floor ${(tc.minBothFloor * 100).toStringAsFixed(0)}%');
+      expect(score.engNotes, greaterThanOrEqualTo(tc.minNotesFloor),
+          reason: '${tc.label}: ${score.engNotes} notes < floor ${tc.minNotesFloor}');
+      expect(score.bothPct, greaterThanOrEqualTo(tc.minBothFloor),
+          reason: '${tc.label}: ${_pc(score.bothPct)}% '
+              '< floor ${_pc(tc.minBothFloor)}%');
     });
   }
 
@@ -494,7 +373,7 @@ void main() {
       final imgData = await rootBundle.load(tc.imagePath);
       final rawPngBytes = imgData.buffer.asUint8List();
       final refXml = await rootBundle.loadString(tc.refPath);
-      final refNotes = _extractNotes(XmlDocument.parse(refXml));
+      final refMeasures = parseMeasures(XmlDocument.parse(refXml));
 
       for (final variant in _sweepVariants) {
         // ignore: avoid_print
@@ -503,11 +382,11 @@ void main() {
           final preprocessed = _applyThreshold(rawPngBytes, variant.threshold);
           final musicXml = await orchestrator.recognise(preprocessed);
           final outDoc = XmlDocument.parse(musicXml);
-          final outNotes = _extractNotes(outDoc);
-          final cmp = _compare(refNotes, outNotes);
-          results[variant.label]![tc.label] = (outNotes.length, cmp.bothPct);
+          final engMeasures = parseMeasures(outDoc);
+          final score = scoreMeasures(refMeasures, engMeasures);
+          results[variant.label]![tc.label] = (score.engNotes, score.bothPct);
           // ignore: avoid_print
-          print('  ${outNotes.length} notes / ${(cmp.bothPct * 100).toStringAsFixed(1)}%');
+          print('  ${score.engNotes} notes / ${_pc(score.bothPct)}%');
         } catch (e) {
           results[variant.label]![tc.label] = null;
           // ignore: avoid_print
@@ -534,7 +413,7 @@ void main() {
         final r = results[variant.label]![tc.label];
         final cell = r == null
             ? 'FAILED'
-            : '${r.$1} notes / ${(r.$2 * 100).toStringAsFixed(1)}%';
+            : '${r.$1} notes / ${_pc(r.$2)}%';
         row.write(' ${cell.padRight(colW)}');
       }
       // ignore: avoid_print

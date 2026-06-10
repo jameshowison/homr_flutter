@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download FP16 ONNX models from homr GitHub releases into assets/models/."""
+"""Download FP16 ONNX models from homr GitHub releases into packages/homr_omr/assets/models/."""
 
 import os
 import sys
@@ -15,7 +15,7 @@ MODELS = [
 ]
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ASSETS_DIR = os.path.join(SCRIPT_DIR, "..", "assets", "models")
+ASSETS_DIR = os.path.join(SCRIPT_DIR, "..", "packages", "homr_omr", "assets", "models")
 
 
 def download_and_unzip(name: str) -> str:
@@ -72,7 +72,7 @@ def main() -> None:
         except Exception as exc:
             print(f"  ERROR: {exc}", file=sys.stderr)
             sys.exit(1)
-    print("\nAll models ready in assets/models/")
+    print("\nAll models ready in packages/homr_omr/assets/models/")
 
 
 if __name__ == "__main__":

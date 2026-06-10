@@ -27,7 +27,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:xml/xml.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'package:homr_flutter/omr_orchestrator.dart';
+import 'package:homr_omr/homr_omr.dart';
 import 'package:homr_flutter/eval/musicxml_scoring.dart';
 
 // ── Song cases ────────────────────────────────────────────────────────────────
@@ -67,8 +67,9 @@ const _cases = [
   _Case('04-go-tell-aunt-rhody',
       'assets/test_images/04-go-tell-aunt-rhody_crop.png',
       'assets/ground_truth/04-go-tell-aunt-rhody.xml'),
+  // island_light: phone photo with pencil marks erased + good lighting → 100%.
   _Case('05-o-come-little-children',
-      'assets/test_images/05-o-come-little-children_crop.png',
+      'assets/test_images/05-o-come-little-children_island_light.png',
       'assets/ground_truth/05-o-come-little-children.xml'),
   _Case('06-may-song',
       'assets/test_images/06-may-song_crop.png',

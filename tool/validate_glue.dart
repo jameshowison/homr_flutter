@@ -3,8 +3,8 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
-import '../lib/pipeline/homr/predictions.dart';
-import '../lib/pipeline/homr/staff_detection.dart';
+import '../packages/homr_omr/lib/src/pipeline/homr/predictions.dart';
+import '../packages/homr_omr/lib/src/pipeline/homr/staff_detection.dart';
 
 // Validates detectStavesFromClassMap (noise filter + make_lines_stronger +
 // fragment/clef extraction + detection) from homr's RAW class map against the

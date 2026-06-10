@@ -4,7 +4,7 @@ import 'package:image/image.dart' as img;
 
 class SegmentationRunner {
   static const String _modelAsset =
-      'assets/models/segnet_308-3296ccd40960f90ca6ab9c035cca945675d30a0f_fp16.onnx';
+      'packages/homr_omr/assets/models/segnet_308-3296ccd40960f90ca6ab9c035cca945675d30a0f_fp16.onnx';
   static const int _patchSize = 320;
   static const int _numClasses = 6;
   static const int _batchSize = 8;
