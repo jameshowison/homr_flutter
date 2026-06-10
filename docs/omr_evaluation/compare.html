@@ -84,6 +84,7 @@
   }
   .swatch.sub { background: #dd3333; }
   .swatch.ins { background: #ff8800; }
+  .swatch.del { background: #3366cc; }
   nav.songNav {
     display: flex;
     gap: 4px;
@@ -111,6 +112,7 @@
   <nav class="songNav" id="songNav">
     <a href="?song=17-gavotte" data-song="17-gavotte">17 — Gavotte</a>
     <a href="?song=14-minuet-no-2" data-song="14-minuet-no-2">14 — Minuet No. 2</a>
+    <a href="?song=10-allegretto" data-song="10-allegretto">10 — Allegretto</a>
   </nav>
 </header>
 
@@ -119,16 +121,17 @@
   <img id="scanImg" alt="scan">
 </section>
 
-<section>
-  <h2>Gold standard</h2>
-  <div id="gold" class="osmd-container"></div>
-</section>
-
 <div class="legend">
   Highlighted notes:
   <span class="swatch sub"></span> wrong pitch and/or duration
   <span class="swatch ins"></span> extra note (no match in gold)
+  <span class="swatch del"></span> missing from engine output (gold standard only)
 </div>
+
+<section>
+  <h2>Gold standard</h2>
+  <div id="gold" class="osmd-container"></div>
+</section>
 
 <section>
   <h2>Engine output (Flutter pipeline)</h2>
@@ -137,7 +140,7 @@
   <div id="engineDiff"></div>
 </section>
 
-<section>
+<section id="homrSection">
   <h2>Python homr output</h2>
   <div class="summary" id="homrSummary"></div>
   <div id="homr" class="osmd-container"></div>
@@ -145,7 +148,7 @@
 </section>
 
 <script>
-const SONGS = ['17-gavotte', '14-minuet-no-2'];
+const SONGS = ['17-gavotte', '14-minuet-no-2', '10-allegretto'];
 
 function songFromQuery() {
   const params = new URLSearchParams(window.location.search);
@@ -226,14 +229,21 @@ async function loadSong(song) {
   document.getElementById('title').textContent = manifest.title;
   document.getElementById('scanImg').src = `compare_data/${manifest.scan}`;
 
-  await renderOsmd('gold', `compare_data/${manifest.gold}`);
+  await renderOsmd('gold', `compare_data/${manifest.goldHighlighted || manifest.gold}`);
   await renderOsmd('engine', `compare_data/${manifest.engine}`);
-  await renderOsmd('homr', `compare_data/${manifest.homr}`);
 
   const engineDiff = await fetchJson(`compare_data/${manifest.engineDiff}`);
-  const homrDiff = await fetchJson(`compare_data/${manifest.homrDiff}`);
   renderDiffTable('engineDiff', 'engineSummary', engineDiff, 'Engine');
-  renderDiffTable('homrDiff', 'homrSummary', homrDiff, 'homr');
+
+  const homrSection = document.getElementById('homrSection');
+  if (manifest.homr && manifest.homrDiff) {
+    homrSection.style.display = '';
+    await renderOsmd('homr', `compare_data/${manifest.homr}`);
+    const homrDiff = await fetchJson(`compare_data/${manifest.homrDiff}`);
+    renderDiffTable('homrDiff', 'homrSummary', homrDiff, 'homr');
+  } else {
+    homrSection.style.display = 'none';
+  }
 }
 
 const initial = songFromQuery();

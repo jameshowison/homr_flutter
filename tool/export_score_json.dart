@@ -6,13 +6,14 @@ import '../lib/eval/musicxml_scoring.dart';
 
 // Exports per-measure divergence data (ref vs eng) as JSON for the HTML
 // comparison tool, and optionally a copy of the eng MusicXML with error
-// notes colored (orange = inserted/extra, red = pitch/duration substitution)
+// notes colored (orange = inserted/extra, red = pitch/duration substitution),
+// and a copy of the ref MusicXML with notes missing from eng colored (blue),
 // for note-level highlighting in OSMD. Usage:
-//   dart run tool/export_score_json.dart <ref.xml> <eng.xml> <out.json> [<eng_highlighted.xml>]
+//   dart run tool/export_score_json.dart <ref.xml> <eng.xml> <out.json> [<eng_highlighted.xml>] [<ref_highlighted.xml>]
 void main(List<String> args) {
   if (args.length < 3) {
     stderr.writeln('Usage: dart run tool/export_score_json.dart '
-        '<ref.xml> <eng.xml> <out.json> [<eng_highlighted.xml>]');
+        '<ref.xml> <eng.xml> <out.json> [<eng_highlighted.xml>] [<ref_highlighted.xml>]');
     exit(1);
   }
 
@@ -67,6 +68,12 @@ void main(List<String> args) {
     File(args[3]).writeAsStringSync(highlighted.toXmlString());
     print('Wrote ${args[3]}');
   }
+
+  if (args.length >= 5) {
+    final highlighted = _highlightMissing(refDoc, score.measures);
+    File(args[4]).writeAsStringSync(highlighted.toXmlString());
+    print('Wrote ${args[4]}');
+  }
 }
 
 /// Returns a copy of [doc] with error notes colored: orange (#ff8800) for
@@ -89,6 +96,38 @@ XmlDocument _highlightErrors(XmlDocument doc, List<MeasureDivergence> divs) {
       if (color == null) continue;
       for (final note in measureNotes[na.engIndex]) {
         note.setAttribute('color', color);
+      }
+    }
+  }
+  return copy;
+}
+
+/// Returns a copy of [doc] (the ref/gold MusicXML) with notes colored blue
+/// (#3366cc) where they have no counterpart in the engine output — either a
+/// note-level deletion within a matched measure, or every note in a ref
+/// measure with no matching engine measure at all.
+XmlDocument _highlightMissing(XmlDocument doc, List<MeasureDivergence> divs) {
+  final copy = doc.copy();
+  final groups = _collectMeasureNoteGroups(copy);
+  const missingColor = '#3366cc';
+
+  for (final m in divs) {
+    if (m.refIndex < 0 || m.refIndex >= groups.length) continue;
+    final measureNotes = groups[m.refIndex];
+    if (m.engIndex < 0) {
+      // Whole ref measure has no engine counterpart — mark every note.
+      for (final group in measureNotes) {
+        for (final note in group) {
+          note.setAttribute('color', missingColor);
+        }
+      }
+      continue;
+    }
+    for (final na in m.noteAlignment) {
+      if (na.kind != NoteAlignKind.del) continue;
+      if (na.refIndex < 0 || na.refIndex >= measureNotes.length) continue;
+      for (final note in measureNotes[na.refIndex]) {
+        note.setAttribute('color', missingColor);
       }
     }
   }

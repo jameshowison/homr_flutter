@@ -12,10 +12,11 @@ Song 12 (Etude) excluded — a/b variation makes a single ground truth ambiguous
 
 | | Count |
 |---|---|
-| **Perfect (SER=0%, both=100%)** | **16 / 18** |
-| With residual errors | 2 / 18 |
+| **Perfect (SER=0%, both=100%)** | **17 / 18** |
+| With residual errors | 1 / 18 |
 
-Total notes in corpus: 1,426 ref / 1,426 engine (Gavotte gold corrected to 194 notes).
+Total notes in corpus: 1,424 ref / 1,426 engine (Gavotte gold corrected to 194
+notes; Allegretto gold corrected to 92 notes).
 
 ---
 
@@ -34,7 +35,7 @@ Total notes in corpus: 1,426 ref / 1,426 engine (Gavotte gold corrected to 194 n
 | 07-long-long-ago | 74 | 74 | 0.0% | 100.0% | 100.0% | 100.0% | 0 | 0 | 7740 |
 | 08-allegro | 72 | 72 | 0.0% | 100.0% | 100.0% | 100.0% | 0 | 0 | 6284 |
 | 09-perpetual-motion | 128 | 128 | 0.0% | 100.0% | 100.0% | 100.0% | 0 | 0 | 8423 |
-| **10-allegretto** ⚠ | 92 | 94 | 2.1% | 100.0% | 100.0% | 100.0% | 0 | 2 | 7167 |
+| **10-allegretto** ✓ | 92 | 92 | 0.0% | 100.0% | 100.0% | 100.0% | 0 | 0 | 7167 |
 | 11-andantino | 76 | 76 | 0.0% | 100.0% | 100.0% | 100.0% | 0 | 0 | 6943 |
 | 13-minuet-no-1 | 82 | 82 | 0.0% | 100.0% | 100.0% | 100.0% | 0 | 0 | 10438 |
 | **14-minuet-no-2** ✓ | 167 | 167 | 0.0% | 100.0% | 100.0% | 100.0% | 0 | 0 | 17300 |
@@ -43,24 +44,28 @@ Total notes in corpus: 1,426 ref / 1,426 engine (Gavotte gold corrected to 194 n
 | **17-gavotte (phone)** ⚠ | 193 | 194 | 1.0% | 99.5% | 100.0% | 99.5% | 0 | 1 | 15649 |
 
 Song 05 marked ✓ — resolved this session (was 2.1% SER in previous sweep).
+Song 10 marked ✓ — resolved this session: ground-truth bug, not a pipeline error
+(see below).
 Song 14 marked ✓ — resolved this session: ground-truth bug, not a pipeline error
 (see below).
 Song 17 numbers updated this session (4.2% → 1.0% SER) — gold standard now
-194 notes (was 192) and beam groups are capped at 4; re-scored from a fresh
-`pdf_artifact_dump_test` run, not yet confirmed via the full sweep.
+194 notes (was 192) and beam groups are capped at 4; confirmed via the full
+sweep.
 
 ---
 
 ## Residual errors detail
 
-### 10 — Allegretto (SER 2.1%)
+### ~~10 — Allegretto~~ ✓ RESOLVED (2026-06-09) — ground-truth bug
 
-2 deletions, pitch and duration of all detected notes correct.  
-- measure #4 (0-based): 1 note deleted  
-- measure #12 (0-based): 1 note deleted  
-
-Both deletions are single isolated notes in separate measures; no cascading.
-See `remaining_issues.md` for hypothesis and next steps.
+**Resolution:** the gold standard (`assets/ground_truth/10-allegretto.xml`)
+had an extra eighth-note rest in measures 5 and 13 — musically invalid,
+since each measure already summed to a full 4/4 bar (480 ticks at
+divisions=120) without it; with the rest included, the measures totalled
+540 ticks (4.5 beats). The rests are also not present in the scanned image.
+The engine's "2 deletions" were in fact correct — it simply didn't
+hallucinate rests that don't exist in the source. Removed both spurious
+`<rest/>` (eighth, duration 60) notes from the gold XML; SER 2.1% → 0.0%.
 
 ### ~~14 — Minuet No. 2~~ ✓ RESOLVED (2026-06-09) — ground-truth bug
 
@@ -97,3 +102,4 @@ See `remaining_issues.md` for full detail.
 | 2026-06-09 | Post-processing: consecutive barlines dropped; time sig locked to first | Several songs fixed |
 | 2026-06-09 | Song 14: fixed ground-truth bug (eighth → dotted half, m. 8 & 32) | 1.2% → **0.0% SER** |
 | 2026-06-09 | Beaming: capped beam groups at ≤4 notes (Gavotte m. 20 was 8-note group) | Song 17: 4.2% → **1.0% SER** |
+| 2026-06-09 | Song 10: fixed ground-truth bug (removed 2 spurious eighth rests, m. 5 & 13) | 2.1% → **0.0% SER** |

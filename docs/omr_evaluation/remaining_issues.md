@@ -5,11 +5,16 @@ Last sweep: 2026-06-09, iPhone 17 simulator.
 ## Current state
 
 18 test cases (14 songs, 4 multi-photo variants).  
-**16/18 perfect** (SER=0%, pitch=dur=both=100%, key=time=clef=100%).  
-2 cases have residual errors — all detailed below.
+**17/18 perfect** (SER=0%, pitch=dur=both=100%, key=time=clef=100%).  
+1 case has residual errors — detailed below.
 
 Song 05 resolved 2026-06-09: good lighting + erasing pencil marks → 100%.
 See resolved section below for full investigation notes.
+
+Song 10 resolved 2026-06-09: ground-truth bug (gold standard had a spurious
+eighth rest in measures 5 and 13, making each measure 4.5 beats — invalid
+for 4/4, and not present in the scanned image) → 100%.
+See resolved section below.
 
 Song 14 resolved 2026-06-09: ground-truth bug (gold standard had an eighth
 note where a dotted half belongs in measures 8 and 32) → 100%.
@@ -74,24 +79,22 @@ Fixed the gold XML to `type=half` + `<dot/>`, `duration=360`. SER 1.2% → 0.0%.
 
 ---
 
-### 10 — Allegretto
+### ~~10 — Allegretto~~ ✓ RESOLVED (2026-06-09)
 
-| Metric | Value |
-|--------|-------|
-| SER | 2.1% (2/94) |
-| Pitch | 100% |
-| Duration | 100% |
-| Notes out/ref | 92/94 |
-| Ins/Del | 0/2 |
+**Resolution:** the gold standard was wrong, not the pipeline.
 
-**Location:** measure 5 (0-based #4) and measure 13 (0-based #12) —
-1 note deleted from each.  
-**Character:** both deletions are in separate measures; no pitch or
-duration errors on any other note. Suggests the transformer drops
-individual notes rather than misreading them.  
-**Hypothesis:** likely low-contrast or tightly-spaced noteheads that
-the segmentation mask under-weights. Needs multi-photo confirmation.  
-**Next step:** 3–4 additional phone photos.
+`assets/ground_truth/10-allegretto.xml` had an extra eighth-note rest
+(`<rest/>`, `duration=60`, `type=eighth`) appended to measures 5 and 13.
+With `divisions=120` and a 4/4 time signature, each measure should sum to
+480 ticks; with the spurious rest, both measures summed to 540 (4.5 beats)
+— musically invalid. Using the comparison viewer
+(`compare.html?song=10-allegretto`) to highlight the gold standard's
+"missing from engine" notes (new blue highlight, see below) showed exactly
+these two rests, in measures that are otherwise correct. The rests are also
+not visible in the scanned image — the engine's "2 deletions" were correct;
+it simply didn't hallucinate rests that don't exist in the source.
+
+Removed both spurious `<rest/>` notes from the gold XML. SER 2.1% → 0.0%.
 
 ---
 
@@ -197,9 +200,7 @@ image can be inspected at `/tmp/homr_pdf_dump_{slug}/tokens.txt`
 
 ## Planned next steps
 
-1. Take 3–4 additional phone photos of songs 10, 17.
-2. Add them to `integration_test/suzuki_book1_sweep_test.dart` and re-run.
-3. If errors are consistent across photos → systematic model issue,
-   report to homr with token stream evidence.
-4. If errors vary → image-quality sensitive, improve scan technique.
-5. File the spurious-barline issue upstream to homr regardless.
+1. File the spurious-barline issue upstream to homr.
+2. Consider reporting the missing-natural-sign and repeat-marker findings
+   (song 17) to homr as model-training observations, with the lift/rhythm
+   debug evidence above.
