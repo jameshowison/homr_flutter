@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
-import 'capture/image_preprocessor.dart' show applyClahe, claheGrayToRgb;
+import 'capture/image_preprocessor.dart' show applyClahe, claheGrayToRgb, eraseLightPixels;
 import 'inference/encoded_symbol.dart';
 import 'inference/segmentation_runner.dart';
 import 'inference/transformer_runner.dart';
@@ -66,10 +66,28 @@ class OmrOrchestrator {
     String title = '',
     bool skipClahe = false,
     String? artifactDir,
+    int? pencilGateThreshold,
   }) async {
     // Decode once; used for CLAHE, dimensions, and transformer crops.
     final fullImage = img.decodeImage(preprocessedPng);
     if (fullImage == null) throw const OmrException('Failed to decode preprocessed PNG');
+
+    // Optional pencil gate: whiten pixels above threshold before CLAHE so that
+    // pencil annotations (typically 160–220 gray) are treated as background.
+    // Ink (0–60) is unaffected. A pencil_gate.png artifact is saved when
+    // artifactDir is set so the effect can be inspected visually.
+    final img.Image claheInput;
+    if (pencilGateThreshold != null) {
+      final gated = eraseLightPixels(fullImage, threshold: pencilGateThreshold);
+      if (artifactDir != null) {
+        Directory(artifactDir).createSync(recursive: true);
+        File('$artifactDir/pencil_gate.png')
+            .writeAsBytesSync(img.encodePng(claheGrayToRgb(gated)));
+      }
+      claheInput = gated;
+    } else {
+      claheInput = fullImage;
+    }
 
     // Apply CLAHE preprocessing — mirrors Python homr's color_adjust.apply_clahe:
     //   cv2.cvtColor(BGR→GRAY) + cv2.createCLAHE(clipLimit=1.0, tileGridSize=(8,8))
@@ -83,10 +101,10 @@ class OmrOrchestrator {
     //
     // skipClahe=true is for diagnostic tests with pre-CLAHEd Python assets.
     final img.Image claheGray = skipClahe
-        ? (fullImage.numChannels == 1
-            ? fullImage
-            : applyClahe(fullImage))
-        : applyClahe(fullImage);
+        ? (claheInput.numChannels == 1
+            ? claheInput
+            : applyClahe(claheInput))
+        : applyClahe(claheInput);
     final claheImage = claheGrayToRgb(claheGray);
     final clahePng = img.encodePng(claheImage);
 
@@ -155,15 +173,42 @@ class OmrOrchestrator {
         File('$artifactDir/staff_${si}_input.png').writeAsBytesSync(stripPng);
       }
 
-      final symbols = await _transformerRunner.runTransformer(stripPng);
+      final liftDebug = artifactDir != null ? <String>[] : null;
+      final rhythmDebug = artifactDir != null ? <String>[] : null;
+      final symbols = await _transformerRunner.runTransformer(stripPng,
+          liftDebug: liftDebug, rhythmDebug: rhythmDebug);
       if (symbols.isNotEmpty) {
         voice.addAll(symbols);
         voice.add(newline);
+      }
+
+      if (artifactDir != null && liftDebug != null) {
+        final lines = [
+          for (int i = 0; i < symbols.length; i++)
+            '${symbols[i].rhythm}|${symbols[i].pitch}|${symbols[i].lift}\t${liftDebug[i]}',
+        ];
+        File('$artifactDir/staff_${si}_lift_debug.txt')
+            .writeAsStringSync(lines.join('\n'));
+      }
+
+      if (artifactDir != null && rhythmDebug != null) {
+        final lines = [
+          for (int i = 0; i < symbols.length; i++)
+            '${symbols[i].rhythm}|${symbols[i].pitch}|${symbols[i].lift}\t${rhythmDebug[i]}',
+        ];
+        File('$artifactDir/staff_${si}_rhythm_debug.txt')
+            .writeAsStringSync(lines.join('\n'));
       }
     }  // end for staves
 
     if (voice.isEmpty) {
       throw const OmrException('Transformer produced no symbols for any staff');
+    }
+
+    if (artifactDir != null) {
+      // One token per line: rhythm|pitch|lift — lets you grep for barline runs.
+      final tokens = voice.map((s) => '${s.rhythm}|${s.pitch}|${s.lift}').join('\n');
+      File('$artifactDir/tokens.txt').writeAsStringSync(tokens);
     }
 
     // ── 4. MusicXML assembly ──────────────────────────────────────────────────

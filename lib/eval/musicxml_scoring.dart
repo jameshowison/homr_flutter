@@ -256,6 +256,23 @@ _Align _nw<T>(
 
 // ── Cost functions ─────────────────────────────────────────────────────────
 
+/// Compare two time signatures as measure-duration fractions.
+/// "4/4" and "2/2" are both 1 whole note per measure → equivalent.
+/// Returns true if either is undeclared or their N/D fractions are equal.
+bool _timeSigEquiv(String a, String b) {
+  if (a.isEmpty || b.isEmpty) return true;
+  if (a == b) return true;
+  final ap = a.split('/');
+  final bp = b.split('/');
+  if (ap.length != 2 || bp.length != 2) return false;
+  final aN = int.tryParse(ap[0]);
+  final aD = int.tryParse(ap[1]);
+  final bN = int.tryParse(bp[0]);
+  final bD = int.tryParse(bp[1]);
+  if (aN == null || aD == null || bN == null || bD == null || aD == 0 || bD == 0) return false;
+  return aN * bD == bN * aD; // cross-multiply to compare fractions
+}
+
 const double _noteGap = 0.85; // indel: prefer substitution for 1-1 regions
 const double _measureGap = 0.75;
 
@@ -296,6 +313,18 @@ class ContextTally {
   int keyOk = 0, timeOk = 0, clefOk = 0;
 }
 
+/// Per-note alignment outcome within a matched measure pair (or whole-measure
+/// insertion/deletion), for note-level error highlighting.
+enum NoteAlignKind { ok, sub, ins, del }
+
+class NoteAlignment {
+  final int refIndex; // index into the ref measure's notes, or -1
+  final int engIndex; // index into the eng measure's notes, or -1
+  final NoteAlignKind kind;
+
+  const NoteAlignment(this.refIndex, this.engIndex, this.kind);
+}
+
 class MeasureDivergence {
   final int refIndex; // -1 if engine-only (extra) measure
   final int engIndex; // -1 if ref-only (missing) measure
@@ -305,6 +334,9 @@ class MeasureDivergence {
   final bool keyOk;
   final bool timeOk;
   final bool clefOk;
+  final String refTimeSig; // for diagnostic display when timeOk==false
+  final String engTimeSig;
+  final List<NoteAlignment> noteAlignment;
 
   const MeasureDivergence(
     this.refIndex,
@@ -314,8 +346,11 @@ class MeasureDivergence {
     this.noteSubErrors,
     this.keyOk,
     this.timeOk,
-    this.clefOk,
-  );
+    this.clefOk, {
+    this.refTimeSig = '',
+    this.engTimeSig = '',
+    this.noteAlignment = const [],
+  });
 
   bool get clean =>
       refIndex >= 0 &&
@@ -383,6 +418,7 @@ MusicXmlScore scoreMeasures(List<EvalMeasure> ref, List<EvalMeasure> eng) {
       final em = eng[mp.b!];
       final na = _nw<EvalNote>(rm.notes, em.notes, _noteSubCost, _noteGap);
       int ins = 0, del = 0, subErr = 0;
+      final noteAlign = <NoteAlignment>[];
 
       for (final np in na.pairs) {
         if (np.a != null && np.b != null) {
@@ -396,8 +432,10 @@ MusicXmlScore scoreMeasures(List<EvalMeasure> ref, List<EvalMeasure> eng) {
           if (durOk) notes.durOk++;
           if (pitchOk && durOk) {
             notes.bothOk++;
+            noteAlign.add(NoteAlignment(np.a!, np.b!, NoteAlignKind.ok));
           } else {
             subErr++;
+            noteAlign.add(NoteAlignment(np.a!, np.b!, NoteAlignKind.sub));
           }
 
           if (!r.isRest && !e.isRest) {
@@ -416,36 +454,48 @@ MusicXmlScore scoreMeasures(List<EvalMeasure> ref, List<EvalMeasure> eng) {
         } else if (np.b != null) {
           notes.insertions++;
           ins++;
+          noteAlign.add(NoteAlignment(-1, np.b!, NoteAlignKind.ins));
         } else {
           notes.deletions++;
           del++;
+          noteAlign.add(NoteAlignment(np.a!, -1, NoteAlignKind.del));
         }
       }
       notes.substitutionsWithError += subErr;
 
       ctx.measuresMatched++;
       final keyOk = rm.keyFifths == em.keyFifths;
-      final timeOk = rm.timeSig == em.timeSig;
-      final clefOk = rm.clef == em.clef;
+      // Time: treat metrically-equivalent signatures as equal (e.g. 4/4 == 2/2).
+      // Clef: undeclared on either side is not a disagreement.
+      final timeOk = _timeSigEquiv(rm.timeSig, em.timeSig);
+      final clefOk = rm.clef.isEmpty || em.clef.isEmpty || rm.clef == em.clef;
       if (keyOk) ctx.keyOk++;
       if (timeOk) ctx.timeOk++;
       if (clefOk) ctx.clefOk++;
       divs.add(MeasureDivergence(
-          mp.a!, mp.b!, ins, del, subErr, keyOk, timeOk, clefOk));
+          mp.a!, mp.b!, ins, del, subErr, keyOk, timeOk, clefOk,
+          refTimeSig: rm.timeSig, engTimeSig: em.timeSig,
+          noteAlignment: noteAlign));
     } else if (mp.b != null) {
       // engine-only measure → all its notes are insertions
       measIns++;
       final em = eng[mp.b!];
       notes.insertions += em.notes.length;
-      divs.add(MeasureDivergence(
-          -1, mp.b!, em.notes.length, 0, 0, true, true, true));
+      divs.add(MeasureDivergence(-1, mp.b!, em.notes.length, 0, 0, true, true, true,
+          noteAlignment: [
+            for (var i = 0; i < em.notes.length; i++)
+              NoteAlignment(-1, i, NoteAlignKind.ins),
+          ]));
     } else {
       // ref-only measure → all its notes are deletions
       measDel++;
       final rm = ref[mp.a!];
       notes.deletions += rm.notes.length;
-      divs.add(MeasureDivergence(
-          mp.a!, -1, 0, rm.notes.length, 0, true, true, true));
+      divs.add(MeasureDivergence(mp.a!, -1, 0, rm.notes.length, 0, true, true, true,
+          noteAlignment: [
+            for (var i = 0; i < rm.notes.length; i++)
+              NoteAlignment(i, -1, NoteAlignKind.del),
+          ]));
     }
   }
 
@@ -488,6 +538,19 @@ String formatReport(MusicXmlScore s, {int maxDivergences = 12}) {
       'clef=${_pc(s.clefPct)}%');
 
   final bad = s.measures.where((m) => !m.clean).toList();
+  // Sort: structural / note-error measures first (within each group, by measure
+  // index); context-only (clef/key/time) mismatches last so the truncation
+  // limit doesn't hide real errors.
+  bad.sort((a, b) {
+    final aNoteErr = a.noteSubErrors + a.noteInsertions + a.noteDeletions > 0 ||
+        a.refIndex < 0 || a.engIndex < 0;
+    final bNoteErr = b.noteSubErrors + b.noteInsertions + b.noteDeletions > 0 ||
+        b.refIndex < 0 || b.engIndex < 0;
+    if (aNoteErr != bNoteErr) return aNoteErr ? -1 : 1;
+    final aIdx = a.refIndex >= 0 ? a.refIndex : a.engIndex;
+    final bIdx = b.refIndex >= 0 ? b.refIndex : b.engIndex;
+    return aIdx.compareTo(bIdx);
+  });
   if (bad.isEmpty) {
     b.writeln('all measures clean ✓');
   } else {

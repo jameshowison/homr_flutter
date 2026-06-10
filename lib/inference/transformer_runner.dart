@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 import 'package:image/image.dart' as img;
@@ -91,7 +92,47 @@ class TransformerRunner {
     return best;
   }
 
-  Future<List<EncodedSymbol>> runTransformer(Uint8List staffPng) async {
+  /// Formats the top-[k] softmax probabilities for a logit slice as
+  /// `"label=0.42 label=0.39 ..."`, for debugging head predictions.
+  static String _topKSoftmax(
+    List<dynamic> flat,
+    int offset,
+    int length,
+    Map<int, String> vocab,
+    int k,
+  ) {
+    double maxVal = double.negativeInfinity;
+    for (int i = 0; i < length; i++) {
+      final v = (flat[offset + i] as num).toDouble();
+      if (v > maxVal) maxVal = v;
+    }
+    double sum = 0;
+    final probs = List<double>.filled(length, 0);
+    for (int i = 0; i < length; i++) {
+      final p = exp((flat[offset + i] as num).toDouble() - maxVal);
+      probs[i] = p;
+      sum += p;
+    }
+    final indices = List<int>.generate(length, (i) => i)
+      ..sort((a, b) => probs[b].compareTo(probs[a]));
+    return indices
+        .take(k)
+        .map((i) => '${vocab[i] ?? i}=${(probs[i] / sum).toStringAsFixed(2)}')
+        .join(' ');
+  }
+
+  /// If [liftDebug] is non-null, appends one entry per emitted symbol with
+  /// the top-3 lift-head softmax probabilities (e.g. "N=0.31 #=0.52 b=0.04"),
+  /// for debugging accidental mispredictions.
+  ///
+  /// If [rhythmDebug] is non-null, appends one entry per emitted symbol with
+  /// the top-3 rhythm-head softmax probabilities, for debugging barline /
+  /// repeat-marker mispredictions.
+  Future<List<EncodedSymbol>> runTransformer(
+    Uint8List staffPng, {
+    List<String>? liftDebug,
+    List<String>? rhythmDebug,
+  }) async {
     final decoded = img.decodeImage(staffPng);
     if (decoded == null) throw Exception('Failed to decode staff PNG');
 
@@ -272,6 +313,16 @@ class TransformerRunner {
             articulationFlat.length - articulationVocabSize, articulationVocabSize);
 
         if (rhythmIdx == Vocabulary.eosToken) break;
+
+        if (liftDebug != null) {
+          liftDebug.add(_topKSoftmax(liftFlat,
+              liftFlat.length - liftVocabSize!, liftVocabSize, Vocabulary.lift, 3));
+        }
+
+        if (rhythmDebug != null) {
+          rhythmDebug.add(_topKSoftmax(rhythmFlat,
+              rhythmFlat.length - rhythmVocabSize!, rhythmVocabSize, Vocabulary.rhythm, 3));
+        }
 
         results.add(EncodedSymbol(
           rhythm: Vocabulary.rhythm[rhythmIdx] ?? rhythmIdx.toString(),

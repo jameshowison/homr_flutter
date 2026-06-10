@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OMR Comparison</title>
+<script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1/build/opensheetmusicdisplay.min.js"></script>
+<style>
+  body {
+    font-family: -apple-system, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 16px 24px 64px;
+    overflow-x: auto;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  header h1 {
+    font-size: 1.3em;
+    margin: 0;
+  }
+  section {
+    margin-bottom: 32px;
+    width: 1400px;
+  }
+  section h2 {
+    font-size: 1em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #555;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 4px;
+  }
+  #scanImg {
+    max-width: 100%;
+    border: 1px solid #ccc;
+  }
+  .osmd-container {
+    width: 1400px;
+    border: 1px solid #ddd;
+  }
+  .summary {
+    font-size: 0.9em;
+    color: #444;
+    margin: 4px 0 8px;
+  }
+  table.diff {
+    border-collapse: collapse;
+    font-size: 0.85em;
+    margin-top: 8px;
+  }
+  table.diff th, table.diff td {
+    border: 1px solid #ccc;
+    padding: 4px 8px;
+    text-align: center;
+  }
+  table.diff th {
+    background: #f0f0f0;
+  }
+  .ok { color: #2a8; }
+  .bad { color: #c33; font-weight: bold; }
+  .empty-note {
+    font-size: 0.85em;
+    color: #2a8;
+    font-style: italic;
+  }
+  .legend {
+    font-size: 0.85em;
+    color: #444;
+    margin: 4px 0 12px;
+  }
+  .legend .swatch {
+    display: inline-block;
+    width: 0.9em;
+    height: 0.9em;
+    border-radius: 2px;
+    vertical-align: middle;
+    margin: 0 4px 0 12px;
+  }
+  .legend .swatch:first-of-type {
+    margin-left: 0;
+  }
+  .swatch.sub { background: #dd3333; }
+  .swatch.ins { background: #ff8800; }
+  nav.songNav {
+    display: flex;
+    gap: 4px;
+  }
+  nav.songNav a {
+    padding: 4px 10px;
+    border-radius: 4px;
+    text-decoration: none;
+    color: #06c;
+    font-size: 0.9em;
+  }
+  nav.songNav a:hover {
+    background: #eef4fb;
+  }
+  nav.songNav a.active {
+    background: #06c;
+    color: #fff;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">OMR Comparison</h1>
+  <nav class="songNav" id="songNav">
+    <a href="?song=17-gavotte" data-song="17-gavotte">17 — Gavotte</a>
+    <a href="?song=14-minuet-no-2" data-song="14-minuet-no-2">14 — Minuet No. 2</a>
+  </nav>
+</header>
+
+<section>
+  <h2>Scan</h2>
+  <img id="scanImg" alt="scan">
+</section>
+
+<section>
+  <h2>Gold standard</h2>
+  <div id="gold" class="osmd-container"></div>
+</section>
+
+<div class="legend">
+  Highlighted notes:
+  <span class="swatch sub"></span> wrong pitch and/or duration
+  <span class="swatch ins"></span> extra note (no match in gold)
+</div>
+
+<section>
+  <h2>Engine output (Flutter pipeline)</h2>
+  <div class="summary" id="engineSummary"></div>
+  <div id="engine" class="osmd-container"></div>
+  <div id="engineDiff"></div>
+</section>
+
+<section>
+  <h2>Python homr output</h2>
+  <div class="summary" id="homrSummary"></div>
+  <div id="homr" class="osmd-container"></div>
+  <div id="homrDiff"></div>
+</section>
+
+<script>
+const SONGS = ['17-gavotte', '14-minuet-no-2'];
+
+function songFromQuery() {
+  const params = new URLSearchParams(window.location.search);
+  const s = params.get('song');
+  return SONGS.includes(s) ? s : SONGS[0];
+}
+
+async function fetchJson(path) {
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`${path}: ${res.status}`);
+  return res.json();
+}
+
+async function fetchText(path) {
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`${path}: ${res.status}`);
+  return res.text();
+}
+
+async function renderOsmd(containerId, xmlPath) {
+  const el = document.getElementById(containerId);
+  el.textContent = `Loading ${xmlPath}...`;
+  try {
+    const xml = await fetchText(xmlPath);
+    el.textContent = '';
+    const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(el, {
+      autoResize: false,
+      drawTitle: false,
+      drawingParameters: 'compacttight',
+    });
+    await osmd.load(xml);
+    osmd.render();
+  } catch (err) {
+    el.textContent = `Error loading ${xmlPath}: ${err}`;
+  }
+}
+
+function renderDiffTable(containerId, summaryId, diff, label) {
+  const summaryEl = document.getElementById(summaryId);
+  const pct = (x) => (x * 100).toFixed(1) + '%';
+  summaryEl.textContent =
+    `SER ${pct(diff.ser)}  |  pitch ${pct(diff.pitchPct)}  |  ` +
+    `dur ${pct(diff.durPct)}  |  both ${pct(diff.bothPct)}  |  ` +
+    `notes ${diff.engNotes}/${diff.refNotes}  |  measures ${diff.engMeasures}/${diff.refMeasures}`;
+
+  const containerEl = document.getElementById(containerId);
+  if (!diff.measures.length) {
+    containerEl.innerHTML = `<p class="empty-note">No divergent measures vs gold.</p>`;
+    return;
+  }
+
+  let html = `<table class="diff"><thead><tr>` +
+    `<th>Gold measure #</th><th>${label} measure #</th>` +
+    `<th>Ins</th><th>Del</th><th>Sub</th>` +
+    `<th>Key</th><th>Time</th><th>Clef</th>` +
+    `</tr></thead><tbody>`;
+
+  for (const m of diff.measures) {
+    const refNum = m.refIndex >= 0 ? m.refIndex + 1 : '—';
+    const engNum = m.engIndex >= 0 ? m.engIndex + 1 : '—';
+    const flag = (ok, sigInfo) => ok
+      ? '<span class="ok">✓</span>'
+      : `<span class="bad">✗${sigInfo ? ` (${sigInfo})` : ''}</span>`;
+    const timeInfo = (!m.timeOk && (m.refTimeSig || m.engTimeSig))
+      ? `${m.refTimeSig}→${m.engTimeSig}` : '';
+    html += `<tr>` +
+      `<td>${refNum}</td><td>${engNum}</td>` +
+      `<td>${m.ins || ''}</td><td>${m.del || ''}</td><td>${m.sub || ''}</td>` +
+      `<td>${flag(m.keyOk)}</td><td>${flag(m.timeOk, timeInfo)}</td><td>${flag(m.clefOk)}</td>` +
+      `</tr>`;
+  }
+  html += `</tbody></table>`;
+  containerEl.innerHTML = html;
+}
+
+async function loadSong(song) {
+  const manifest = await fetchJson(`compare_data/${song}.json`);
+  document.getElementById('title').textContent = manifest.title;
+  document.getElementById('scanImg').src = `compare_data/${manifest.scan}`;
+
+  await renderOsmd('gold', `compare_data/${manifest.gold}`);
+  await renderOsmd('engine', `compare_data/${manifest.engine}`);
+  await renderOsmd('homr', `compare_data/${manifest.homr}`);
+
+  const engineDiff = await fetchJson(`compare_data/${manifest.engineDiff}`);
+  const homrDiff = await fetchJson(`compare_data/${manifest.homrDiff}`);
+  renderDiffTable('engineDiff', 'engineSummary', engineDiff, 'Engine');
+  renderDiffTable('homrDiff', 'homrSummary', homrDiff, 'homr');
+}
+
+const initial = songFromQuery();
+for (const a of document.querySelectorAll('#songNav a')) {
+  if (a.dataset.song === initial) a.classList.add('active');
+}
+
+loadSong(initial);
+</script>
+</body>
+</html>

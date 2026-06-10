@@ -47,5 +47,9 @@ app.*.map.json
 # ONNX model files (large binaries — fetch with tools/fetch_models.py)
 assets/models/*.onnx
 
+# OMR comparison scratch data — copyrighted scans, regenerate with
+# docs/omr_evaluation/compare.html instructions
+docs/omr_evaluation/compare_data/
+
 # Xcode SwiftPM derived data
 **/xcshareddata/swiftpm/
