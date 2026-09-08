@@ -661,19 +661,29 @@ void _assignBeams(List<(XmlElement, String)> run) {
 const int _maxBeamGroup = 4;
 
 // Groups consecutive beamable non-rest notes within the same beat and beams
-// them, splitting into chunks of at most [_maxBeamGroup] notes.
-void _beamVoice(List<(XmlElement, int, String, bool)> notes, int beatTicks) {
+// them, splitting into chunks of at most [_maxBeamGroup] notes. When
+// [pairEighthBeats] is set (simple meter, even beat count), a run of plain
+// eighth notes starting on an even-numbered beat may additionally span into
+// the next beat — e.g. beats 0+1 or 2+1 in 4/4 — so a full beat pair beams
+// as one group of up to [_maxBeamGroup] instead of splitting at the halfway
+// point. Anything finer than an eighth (16th and up) always stays within a
+// single beat, matching the existing Suzuki Book 1 convention.
+void _beamVoice(
+    List<(XmlElement, int, String, bool)> notes, int beatTicks, bool pairEighthBeats) {
   int i = 0;
   while (i < notes.length) {
     final type = notes[i].$3;
     final isRest = notes[i].$4;
     if (isRest || !_beamLevels.containsKey(type)) { i++; continue; }
     final beat = notes[i].$2 ~/ beatTicks;
+    final canPair = pairEighthBeats && _beamLevels[type] == 1 && beat.isEven;
+    var maxLevelSeen = _beamLevels[type]!;
     int j = i + 1;
-    while (j < notes.length &&
-        !notes[j].$4 &&
-        _beamLevels.containsKey(notes[j].$3) &&
-        notes[j].$2 ~/ beatTicks == beat) {
+    while (j < notes.length && !notes[j].$4 && _beamLevels.containsKey(notes[j].$3)) {
+      final level = _beamLevels[notes[j].$3]!;
+      final allowedSpan = (canPair && maxLevelSeen == 1 && level == 1) ? 1 : 0;
+      if (notes[j].$2 ~/ beatTicks - beat > allowedSpan) break;
+      maxLevelSeen = max(maxLevelSeen, level);
       j++;
     }
     for (int k = i; k < j; k += _maxBeamGroup) {
@@ -686,7 +696,7 @@ void _beamVoice(List<(XmlElement, int, String, bool)> notes, int beatTicks) {
   }
 }
 
-void _beamMeasure(XmlElement measure, int beatTicks) {
+void _beamMeasure(XmlElement measure, int beatTicks, bool pairEighthBeats) {
   if (beatTicks <= 0) return;
   final Map<int, List<(XmlElement, int, String, bool)>> byVoice = {};
   int tick = 0;
@@ -712,7 +722,7 @@ void _beamMeasure(XmlElement measure, int beatTicks) {
     }
   }
   for (final voiceNotes in byVoice.values) {
-    _beamVoice(voiceNotes, beatTicks);
+    _beamVoice(voiceNotes, beatTicks, pairEighthBeats);
   }
 }
 
@@ -720,6 +730,7 @@ void _beamMeasure(XmlElement measure, int beatTicks) {
 void _addBeaming(List<XmlElement> measures) {
   int divPerQuarter = 4;
   int beatTicks = divPerQuarter;
+  bool pairEighthBeats = false;
   for (final measure in measures) {
     for (final attrs in measure.findElements('attributes')) {
       final d = int.tryParse(
@@ -732,12 +743,18 @@ void _addBeaming(List<XmlElement> measures) {
         final d2 = int.tryParse(
                 time.findElements('beat-type').firstOrNull?.innerText ?? '') ?? 4;
         // Compound meter (6/8, 9/8, 12/8): beat = 3 subbeats.
-        beatTicks = (n % 3 == 0 && d2 >= 8)
+        final isCompound = n % 3 == 0 && d2 >= 8;
+        beatTicks = isCompound
             ? 3 * (divPerQuarter * 4 ~/ d2)
             : divPerQuarter * 4 ~/ d2;
+        // Simple meter with an even beat count (2/4, 4/4, ...) conventionally
+        // beams plain eighth notes in beat pairs (up to 4 at a time) rather
+        // than splitting at every single beat; odd/compound meters keep the
+        // single-beat grouping.
+        pairEighthBeats = !isCompound && n % 2 == 0;
       }
     }
-    _beamMeasure(measure, beatTicks);
+    _beamMeasure(measure, beatTicks, pairEighthBeats);
   }
 }
 
