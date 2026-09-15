@@ -69,7 +69,83 @@ class OmrOrchestrator {
     int? pencilGateThreshold,
   }) async {
     final writer = ArtifactWriter.maybeCreate(artifactDir);
+    final voice = await _recognisePageSymbols(
+      preprocessedPng,
+      onProgress: onProgress,
+      skipClahe: skipClahe,
+      writer: writer,
+      pencilGateThreshold: pencilGateThreshold,
+    );
+    if (voice.isEmpty) {
+      throw const OmrException('Transformer produced no symbols for any staff');
+    }
 
+    onProgress?.call(OmrStage.assembling);
+    return MusicXmlAssembler.assemble([voice], title: title);
+  }
+
+  /// Recognises [pages] (preprocessed PNGs in page order, as produced by
+  /// [ImagePreprocessor]/crop for each page of a multi-page scan) and returns
+  /// ONE MusicXML 4.0 string spanning all pages as a single continuous part.
+  ///
+  /// Each page is segmented and recognised independently, then their symbol
+  /// sequences are concatenated in page order before assembling once. This
+  /// works because [_recognisePageSymbols] already appends a trailing
+  /// `newline` token after every staff — including the last staff of a page
+  /// — so no extra separator is needed between pages; adding one would
+  /// double up as a spurious blank system-break at the page boundary.
+  ///
+  /// [onProgress] is called with the 0-based page index and each [OmrStage]
+  /// as that page advances through the pipeline. [title] is embedded once in
+  /// the MusicXML work-title element. When [artifactDir] is set, each page's
+  /// intermediate artifacts are written under `$artifactDir/page_N/`.
+  ///
+  /// Throws [OmrException] if [pages] is empty or no page yields any symbols.
+  Future<String> recogniseMultiPage(
+    List<Uint8List> pages, {
+    void Function(int pageIndex, OmrStage stage)? onProgress,
+    String title = '',
+    bool skipClahe = false,
+    String? artifactDir,
+    int? pencilGateThreshold,
+  }) async {
+    if (pages.isEmpty) throw const OmrException('No pages to recognise');
+
+    final combined = <EncodedSymbol>[];
+    for (var i = 0; i < pages.length; i++) {
+      final writer = ArtifactWriter.maybeCreate(
+        artifactDir == null ? null : '$artifactDir/page_$i',
+      );
+      final pageVoice = await _recognisePageSymbols(
+        pages[i],
+        onProgress: (stage) => onProgress?.call(i, stage),
+        skipClahe: skipClahe,
+        writer: writer,
+        pencilGateThreshold: pencilGateThreshold,
+      );
+      combined.addAll(pageVoice);
+    }
+
+    if (combined.isEmpty) {
+      throw const OmrException('Transformer produced no symbols for any page');
+    }
+
+    onProgress?.call(pages.length - 1, OmrStage.assembling);
+    return MusicXmlAssembler.assemble([combined], title: title);
+  }
+
+  /// Runs CLAHE preprocessing, SegNet segmentation, staff detection, and
+  /// per-staff transformer recognition on one page image, returning its flat
+  /// symbol list (staves concatenated with trailing `newline` separators)
+  /// WITHOUT assembling MusicXML. Shared by [recognise] (single page) and
+  /// [recogniseMultiPage] (N pages, assembled once at the end).
+  Future<List<EncodedSymbol>> _recognisePageSymbols(
+    Uint8List preprocessedPng, {
+    void Function(OmrStage)? onProgress,
+    bool skipClahe = false,
+    ArtifactWriter? writer,
+    int? pencilGateThreshold,
+  }) async {
     // Decode once; used for CLAHE, dimensions, and transformer crops.
     final fullImage = img.decodeImage(preprocessedPng);
     if (fullImage == null) throw const OmrException('Failed to decode preprocessed PNG');
@@ -190,19 +266,13 @@ class OmrOrchestrator {
       }
     }  // end for staves
 
-    if (voice.isEmpty) {
-      throw const OmrException('Transformer produced no symbols for any staff');
-    }
-
     if (writer != null) {
       // One token per line: rhythm|pitch|lift — lets you grep for barline runs.
       final tokens = voice.map((s) => '${s.rhythm}|${s.pitch}|${s.lift}').join('\n');
       writer.writeString('tokens.txt', tokens);
     }
 
-    // ── 4. MusicXML assembly ──────────────────────────────────────────────────
-    onProgress?.call(OmrStage.assembling);
-    return MusicXmlAssembler.assemble([voice], title: title);
+    return voice;
   }
 
   /// Produces a teaser PNG: CLAHE image with each staff's resampled grid lines
