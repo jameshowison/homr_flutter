@@ -133,6 +133,22 @@ Evaluated against ground-truth MusicXML on iPhone 17 simulator (2026-06-09).
 Full results: `docs/omr_evaluation/current_status.md`.  
 Residual issues and investigation notes: `docs/omr_evaluation/remaining_issues.md`.
 
+### Test data
+
+The scans and ground truth these numbers come from are not in the repository:
+*Suzuki Violin School, Book 1* is a copyrighted edition, so the page images and
+the MusicXML transcribed from them stay local. The integration tests expect them in
+`assets/test_images/` and `assets/ground_truth/` (both gitignored), named:
+
+- `assets/test_images/NN-slug_scan.png` — the full scanned page
+- `assets/test_images/NN-slug_crop.png` — the page cropped to the staves
+- `assets/ground_truth/NN-slug.xml` — the reference MusicXML
+
+for example `02-lightly-row_scan.png` and `02-lightly-row.xml`. The test files
+list the exact names they load. The tests in `pdf_artifact_dump_test.dart` that use
+camera photos read them from a folder you pass with
+`--dart-define=HOMR_PHOTO_DIR=/path/to/photos`, and are skipped without it.
+
 ### Scanning technique
 
 Best results come from:

@@ -187,6 +187,9 @@ Stage B (mobile ONNX embedding) can now begin.
 
 ## Artifacts
 
+These files were produced from copyrighted Suzuki Book 1 pages and are not in
+the public repository; the table records what was kept locally.
+
 | File | Description |
 |------|-------------|
 | `lightly_row_no_title.musicxml` | Homr output (colour PNG, reference) — 100% |

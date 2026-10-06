@@ -6,6 +6,10 @@
 //
 // Run with:
 //   flutter test integration_test/pdf_artifact_dump_test.dart --name "dump"
+//
+// The camera-photo cases read from a local folder of photos that are not in
+// the repo; pass it with --dart-define=HOMR_PHOTO_DIR=/path/to/photos or they
+// are skipped.
 
 import 'dart:io';
 import 'package:flutter/services.dart';
@@ -26,6 +30,8 @@ Uint8List _resizeTo(Uint8List pngBytes, int targetWidth) {
   final resized = img.copyResize(decoded, width: targetWidth, height: targetHeight);
   return img.encodePng(resized);
 }
+
+const _photoDir = String.fromEnvironment('HOMR_PHOTO_DIR');
 
 const _cases = [
   ('01-twinkle',    'assets/test_images/01-twinkle-twinkle-little-star_crop.png'),
@@ -83,11 +89,10 @@ void main() {
   // Direct camera photo of O Come — runs outside rootBundle using dart:io.
   testWidgets('dump: 05-o-come-camera-photo',
       timeout: const Timeout(Duration(seconds: 300)),
+      skip: _photoDir.isEmpty,
       (tester) async {
     const slug = '05-o-come-camera-photo';
-    const photoPath =
-        '/path/to/violin_practice_companion'
-        '/docs/photos_no_share/o_come_photo.png';
+    const photoPath = '$_photoDir/o_come_photo.png';
     const refAsset = 'assets/ground_truth/05-o-come-little-children.xml';
     final artifactDir = '/tmp/homr_pdf_dump_$slug';
     Directory(artifactDir).createSync(recursive: true);
@@ -136,11 +141,10 @@ void main() {
   // No-pencil version of O Come — compare note count and accuracy vs original photo.
   testWidgets('dump: 05-o-come-no-pencil',
       timeout: const Timeout(Duration(seconds: 300)),
+      skip: _photoDir.isEmpty,
       (tester) async {
     const slug = '05-o-come-no-pencil';
-    const photoPath =
-        '/path/to/violin_practice_companion'
-        '/docs/photos_no_share/o_come_no_pencil.png';
+    const photoPath = '$_photoDir/o_come_no_pencil.png';
     const refAsset = 'assets/ground_truth/05-o-come-little-children.xml';
     final artifactDir = '/tmp/homr_pdf_dump_$slug';
     Directory(artifactDir).createSync(recursive: true);
@@ -189,11 +193,10 @@ void main() {
   // Island-light photo of O Come (lighter exposure than o_come_photo.png).
   testWidgets('dump: 05-o-come-island-light',
       timeout: const Timeout(Duration(seconds: 300)),
+      skip: _photoDir.isEmpty,
       (tester) async {
     const slug = '05-o-come-island-light';
-    const photoPath =
-        '/path/to/violin_practice_companion'
-        '/docs/photos_no_share/o_come_island_light.png';
+    const photoPath = '$_photoDir/o_come_island_light.png';
     const refAsset = 'assets/ground_truth/05-o-come-little-children.xml';
     final artifactDir = '/tmp/homr_pdf_dump_$slug';
     Directory(artifactDir).createSync(recursive: true);
@@ -304,11 +307,10 @@ void main() {
   // Island-light 1-up photo of Gavotte (compare to gavotte_notes.png phone photo, SER=4.2%).
   testWidgets('dump: 17-gavotte-island-light',
       timeout: const Timeout(Duration(seconds: 300)),
+      skip: _photoDir.isEmpty,
       (tester) async {
     const slug = '17-gavotte-island-light';
-    const photoPath =
-        '/path/to/violin_practice_companion'
-        '/docs/photos_no_share/gavotte_1_up_island.png';
+    const photoPath = '$_photoDir/gavotte_1_up_island.png';
     const refAsset = 'assets/ground_truth/17-gavotte.xml';
     final artifactDir = '/tmp/homr_pdf_dump_$slug';
     Directory(artifactDir).createSync(recursive: true);
@@ -358,11 +360,10 @@ void main() {
   // Island-light 1-up photo of Minuet No. 2 (compare to crop PNG, SER=1.2%).
   testWidgets('dump: 14-minuet-no-2-island-light',
       timeout: const Timeout(Duration(seconds: 300)),
+      skip: _photoDir.isEmpty,
       (tester) async {
     const slug = '14-minuet-no-2-island-light';
-    const photoPath =
-        '/path/to/violin_practice_companion'
-        '/docs/photos_no_share/minuet2_1_up_island.png';
+    const photoPath = '$_photoDir/minuet2_1_up_island.png';
     const refAsset = 'assets/ground_truth/14-minuet-no-2.xml';
     final artifactDir = '/tmp/homr_pdf_dump_$slug';
     Directory(artifactDir).createSync(recursive: true);

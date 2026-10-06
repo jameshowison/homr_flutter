@@ -1,5 +1,8 @@
 # Issue text for gitlab.com/chrisspen/abc-music
 
+The three patch files named below were written for this upstream report and are not
+kept in this repository.
+
 **Title:** Suzuki Violin Book 1: several bars have invalid total durations
 (dotted-half encoded as `5`, stray `z` rest)
 

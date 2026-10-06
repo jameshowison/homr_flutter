@@ -128,6 +128,9 @@ in Oemer; a bug report to the upstream repo is warranted.
 
 ## Artifacts
 
+These files were produced from copyrighted Suzuki Book 1 pages and are not in
+the public repository; the table records what was kept locally.
+
 | File | Description |
 |------|-------------|
 | `lightly_row_no_title.musicxml` | Oemer output for Lightly Row (no-title crop) |

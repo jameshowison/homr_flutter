@@ -2,19 +2,22 @@
 """Compare OMR MusicXML output against gold-standard fixtures.
 
 Usage:
-    python compare_omr.py <engine_lr.musicxml> <engine_hf.musicxml>
+    FIXTURES_DIR=/path/to/fixtures python compare_omr.py <engine_lr.musicxml> <engine_hf.musicxml>
+
+FIXTURES_DIR holds the gold-standard MuseScore exports (not in this repo).
 
 Engine label is inferred from the parent directory name.
 """
 
+import os
 import sys
 import xml.etree.ElementTree as ET
 
-BASE = '/path/to/violin_practice_companion'
+FIXTURES_DIR = os.environ.get('FIXTURES_DIR', 'fixtures')
 
 GOLD = {
-    'lr': f'{BASE}/assets/fixtures/lightly_row_musescore.xml',
-    'hf': f'{BASE}/assets/fixtures/happy_farmer_musescore.xml',
+    'lr': f'{FIXTURES_DIR}/lightly_row_musescore.xml',
+    'hf': f'{FIXTURES_DIR}/happy_farmer_musescore.xml',
 }
 
 

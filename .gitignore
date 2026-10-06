@@ -48,6 +48,13 @@ app.*.map.json
 # packages/homr_flutter/tool/fetch_models.py assets/omr_models)
 assets/omr_models/*.onnx
 
+# Test scans and ground truth (Suzuki Violin School Book 1 is copyrighted, so
+# they stay local; see "Test data" in README.md)
+assets/test_images/*
+!assets/test_images/.gitkeep
+assets/ground_truth/*
+!assets/ground_truth/.gitkeep
+
 # OMR comparison scratch data — copyrighted scans, regenerate with
 # docs/omr_evaluation/compare.html instructions
 docs/omr_evaluation/compare_data/
