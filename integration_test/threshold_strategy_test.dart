@@ -23,8 +23,10 @@ import 'package:image/image.dart' as img;
 import 'package:integration_test/integration_test.dart';
 import 'package:xml/xml.dart';
 
-import 'package:homr_omr/homr_omr.dart';
-import 'package:homr_flutter/eval/musicxml_scoring.dart';
+import 'package:homr_flutter/homr_flutter.dart';
+import 'package:homr_flutter/preprocessing.dart';
+import 'package:homr_flutter_demo/eval/musicxml_scoring.dart';
+import 'package:homr_flutter_demo/omr_models.dart';
 
 const _bundled = [
   ('Happy Farmer', 'assets/test_images/happy_farmer_notes.png',
@@ -64,7 +66,7 @@ void main() {
       ));
     }
 
-    final orchestrator = OmrOrchestrator();
+    final orchestrator = OmrOrchestrator(models: demoModels);
     final rows = <String>[];
     for (final (label, raw, refXml) in cases) {
       final raw1920 = _to1920(raw);

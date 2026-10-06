@@ -1,8 +1,8 @@
 // ignore_for_file: implementation_imports
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xml/xml.dart';
-import 'package:homr_omr/src/inference/encoded_symbol.dart';
-import 'package:homr_omr/src/pipeline/musicxml_assembler.dart';
+import 'package:homr_flutter/src/inference/encoded_symbol.dart';
+import 'package:homr_flutter/src/pipeline/musicxml_assembler.dart';
 
 // Helper: parse MusicXML string and return the document root.
 XmlDocument _parse(String xml) => XmlDocument.parse(xml);

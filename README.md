@@ -1,8 +1,26 @@
 # homr_flutter
 
-On-device OMR (Optical Music Recognition) Flutter app for Suzuki Violin Book 1.
-Phases 0–7 complete — see `docs/pipeline_investigation.md` and
-`docs/homr_flutter_integration.md`.
+On-device OMR (Optical Music Recognition) for Flutter: a Dart port of
+[homr](https://github.com/liebharc/homr). Phases 0–7 complete — see
+`docs/pipeline_investigation.md` and `docs/homr_flutter_integration.md`.
+
+This repo holds two things:
+
+- **`packages/homr_flutter/`** — the package apps depend on (`homr_flutter`,
+  AGPL-3.0). Its [README](packages/homr_flutter/README.md) covers setup and
+  usage. Apps pin a release tag (`v0.1.0`, …) as a git dependency.
+- **the root** — `homr_flutter_demo`: a demo app, the accuracy benchmarks and
+  the evaluation tooling.
+
+Before running the demo or any integration test, fetch homr's models into the
+demo's assets (≈150 MB, once; gitignored):
+
+```bash
+python3 packages/homr_flutter/tool/fetch_models.py assets/omr_models
+```
+
+To release: bump `version` and `CHANGELOG.md` in the package, commit, tag
+`vX.Y.Z`, push the tag; dependent apps move their `ref:` to it.
 
 ## OMR accuracy (Suzuki Book 1)
 

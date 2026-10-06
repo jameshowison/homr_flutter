@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xml/xml.dart';
-import 'package:homr_flutter/eval/musicxml_scoring.dart';
+import 'package:homr_flutter_demo/eval/musicxml_scoring.dart';
 
 // ── Minimal MusicXML builders ────────────────────────────────────────────────
 

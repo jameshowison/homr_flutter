@@ -27,8 +27,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:xml/xml.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'package:homr_omr/homr_omr.dart';
-import 'package:homr_flutter/eval/musicxml_scoring.dart';
+import 'package:homr_flutter/homr_flutter.dart';
+import 'package:homr_flutter_demo/eval/musicxml_scoring.dart';
+import 'package:homr_flutter_demo/omr_models.dart';
 
 // ── Song cases ────────────────────────────────────────────────────────────────
 //
@@ -150,7 +151,7 @@ void main() {
       String? musicXml;
 
       try {
-        musicXml = await OmrOrchestrator()
+        musicXml = await OmrOrchestrator(models: demoModels)
             .recognise(pngBytes)
             .timeout(const Duration(seconds: 600));
       } on TimeoutException {

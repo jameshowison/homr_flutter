@@ -7,10 +7,12 @@ import 'encoded_symbol.dart';
 import 'vocabulary.dart';
 
 class TransformerRunner {
-  static const String _encoderAsset =
-      'packages/homr_omr/assets/models/encoder_pytorch_model_367-575b4737bca815d3a7b37169269fc548d7e945b9_fp16.onnx';
-  static const String _decoderAsset =
-      'packages/homr_omr/assets/models/decoder_pytorch_model_367-575b4737bca815d3a7b37169269fc548d7e945b9_fp16.onnx';
+  /// Asset keys of the encoder and decoder in the app's bundle; see
+  /// [OmrModels].
+  TransformerRunner({required this.encoderAsset, required this.decoderAsset});
+
+  final String encoderAsset;
+  final String decoderAsset;
 
   static const int _encoderH = 256;
   static const int _encoderW = 1280;
@@ -23,20 +25,16 @@ class TransformerRunner {
   static const int _numCacheTensors = _decoderDepth * 4; // 32
   static const int _maxSteps = 608;
 
-  static OrtSession? _encoderSession;
-  static OrtSession? _decoderSession;
+  /// One session per model, for the life of the process (see
+  /// SegmentationRunner).
+  static final _sessions = <String, Future<OrtSession>>{};
 
-  static Future<OrtSession> _getEncoderSession() async {
-    _encoderSession ??=
-        await OnnxRuntime().createSessionFromAsset(_encoderAsset);
-    return _encoderSession!;
-  }
+  static Future<OrtSession> _session(String asset) => _sessions.putIfAbsent(
+      asset, () => OnnxRuntime().createSessionFromAsset(asset));
 
-  static Future<OrtSession> _getDecoderSession() async {
-    _decoderSession ??=
-        await OnnxRuntime().createSessionFromAsset(_decoderAsset);
-    return _decoderSession!;
-  }
+  Future<OrtSession> _getEncoderSession() => _session(encoderAsset);
+
+  Future<OrtSession> _getDecoderSession() => _session(decoderAsset);
 
   /// Letterbox image to fit within [_encoderH] x [_encoderW] preserving
   /// aspect ratio, padding with white (255).
@@ -316,12 +314,12 @@ class TransformerRunner {
 
         if (liftDebug != null) {
           liftDebug.add(_topKSoftmax(liftFlat,
-              liftFlat.length - liftVocabSize!, liftVocabSize, Vocabulary.lift, 3));
+              liftFlat.length - liftVocabSize, liftVocabSize, Vocabulary.lift, 3));
         }
 
         if (rhythmDebug != null) {
           rhythmDebug.add(_topKSoftmax(rhythmFlat,
-              rhythmFlat.length - rhythmVocabSize!, rhythmVocabSize, Vocabulary.rhythm, 3));
+              rhythmFlat.length - rhythmVocabSize, rhythmVocabSize, Vocabulary.rhythm, 3));
         }
 
         results.add(EncodedSymbol(

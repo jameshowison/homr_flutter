@@ -20,8 +20,9 @@ import 'package:image/image.dart' as img;
 import 'package:integration_test/integration_test.dart';
 import 'package:xml/xml.dart';
 
-import 'package:homr_omr/homr_omr.dart';
-import 'package:homr_flutter/eval/musicxml_scoring.dart';
+import 'package:homr_flutter/homr_flutter.dart';
+import 'package:homr_flutter_demo/eval/musicxml_scoring.dart';
+import 'package:homr_flutter_demo/omr_models.dart';
 
 // ── Test-case descriptors ─────────────────────────────────────────────────────
 
@@ -193,7 +194,7 @@ void main() {
 
       late String musicXml;
       try {
-        musicXml = await OmrOrchestrator().recognise(
+        musicXml = await OmrOrchestrator(models: demoModels).recognise(
           pngBytes,
           onProgress: (stage) {
             timer.begin(stage.name);
@@ -326,7 +327,7 @@ void main() {
 
       late String musicXml;
       try {
-        musicXml = await OmrOrchestrator().recognise(
+        musicXml = await OmrOrchestrator(models: demoModels).recognise(
           pngBytes,
           skipClahe: true,
         );
@@ -367,7 +368,7 @@ void main() {
     }
 
     // Reuse one orchestrator so ONNX models stay warm across variants.
-    final orchestrator = OmrOrchestrator();
+    final orchestrator = OmrOrchestrator(models: demoModels);
 
     for (final tc in _cases) {
       final imgData = await rootBundle.load(tc.imagePath);
@@ -437,7 +438,7 @@ void main() {
     Directory(artifactDir).createSync(recursive: true);
 
     final imgData = await rootBundle.load('assets/test_images/lightly_row2_notes.png');
-    await OmrOrchestrator().recognise(
+    await OmrOrchestrator(models: demoModels).recognise(
       imgData.buffer.asUint8List(),
       artifactDir: artifactDir,
     );
@@ -457,7 +458,7 @@ void main() {
     Directory(artifactDir).createSync(recursive: true);
 
     final imgData = await rootBundle.load('assets/test_images/happy_farmer_notes.png');
-    await OmrOrchestrator().recognise(
+    await OmrOrchestrator(models: demoModels).recognise(
       imgData.buffer.asUint8List(),
       artifactDir: artifactDir,
     );
@@ -476,7 +477,7 @@ void main() {
     const artifactDir = '/tmp/homr_dart_gavotte';
 
     final imgData = await rootBundle.load('assets/test_images/gavotte_notes.png');
-    await OmrOrchestrator().recognise(
+    await OmrOrchestrator(models: demoModels).recognise(
       imgData.buffer.asUint8List(),
       artifactDir: artifactDir,
     );

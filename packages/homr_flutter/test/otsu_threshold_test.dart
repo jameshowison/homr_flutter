@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:homr_omr/homr_omr.dart';
+import 'package:homr_flutter/preprocessing.dart';
 import 'package:image/image.dart' as img;
 
 img.Image _twoTone(int ink, int paper, {int inkPixels = 100, int total = 1000}) {

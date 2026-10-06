@@ -7,6 +7,10 @@
 > photographed pages, and the missing resize was what really broke small
 > crops. Evidence: `integration_test/threshold_strategy_test.dart`, and
 > `violin_practice_companion/docs/explore.md` (binarization section).
+>
+> **Models (Oct 2026):** the package no longer bundles them. The app supplies
+> their location (`OmrModels`), and `packages/homr_flutter/tool/fetch_models.py`
+> fetches and verifies them; the `assets/models/` layout below is historical.
 
 
 ## Status

@@ -1,0 +1,4 @@
+# Libraries do not pin their dependencies; apps do.
+pubspec.lock
+.dart_tool/
+build/

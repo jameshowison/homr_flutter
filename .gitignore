@@ -44,9 +44,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# ONNX model files (large binaries — fetch with tools/fetch_models.py)
-assets/models/*.onnx
-packages/homr_omr/assets/models/*.onnx
+# ONNX model files (large binaries — fetch with
+# packages/homr_flutter/tool/fetch_models.py assets/omr_models)
+assets/omr_models/*.onnx
 
 # OMR comparison scratch data — copyrighted scans, regenerate with
 # docs/omr_evaluation/compare.html instructions

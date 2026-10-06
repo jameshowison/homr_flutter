@@ -5,10 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:xml/xml.dart';
 
-import 'package:homr_omr/homr_omr.dart';
-import 'package:homr_omr/src/inference/encoded_symbol.dart';
-import 'package:homr_omr/src/inference/segmentation_runner.dart';
-import 'package:homr_omr/src/inference/transformer_runner.dart';
+import 'package:homr_flutter/homr_flutter.dart';
+import 'package:homr_flutter/src/inference/encoded_symbol.dart';
+import 'package:homr_flutter/src/inference/segmentation_runner.dart';
+import 'package:homr_flutter/src/inference/transformer_runner.dart';
 
 // 1920 wide so the orchestrator's homr resize (to exactly 1920) is a no-op
 // and this map still lines up with the image it stands in for.
@@ -54,7 +54,7 @@ Uint8List _blankPreprocessedPng() {
 
 class _FakeSegmentationRunner extends SegmentationRunner {
   final Uint8List classMap;
-  _FakeSegmentationRunner(this.classMap);
+  _FakeSegmentationRunner(this.classMap) : super('unused');
 
   @override
   Future<Uint8List> runSegmentation(Uint8List pngBytes) async => classMap;
@@ -66,7 +66,8 @@ class _FakeSegmentationRunner extends SegmentationRunner {
 class _FakeTransformerRunner extends TransformerRunner {
   final List<String> notePitches;
   int calls = 0;
-  _FakeTransformerRunner(this.notePitches);
+  _FakeTransformerRunner(this.notePitches)
+      : super(encoderAsset: 'unused', decoderAsset: 'unused');
 
   @override
   Future<List<EncodedSymbol>> runTransformer(
@@ -96,7 +97,7 @@ void main() {
     test('concatenates pages in order into one continuous part', () async {
       final classMap = _syntheticClassMap();
       final page = _blankPreprocessedPng();
-      final orchestrator = OmrOrchestrator(
+      final orchestrator = OmrOrchestrator.withRunners(
         segRunner: _FakeSegmentationRunner(classMap),
         transformerRunner: _FakeTransformerRunner(['C4', 'D4']),
       );
@@ -124,7 +125,7 @@ void main() {
     test('reports (pageIndex, stage) in order across pages', () async {
       final classMap = _syntheticClassMap();
       final page = _blankPreprocessedPng();
-      final orchestrator = OmrOrchestrator(
+      final orchestrator = OmrOrchestrator.withRunners(
         segRunner: _FakeSegmentationRunner(classMap),
         transformerRunner: _FakeTransformerRunner(['C4', 'D4']),
       );
@@ -147,7 +148,7 @@ void main() {
     });
 
     test('throws OmrException for an empty page list', () {
-      final orchestrator = OmrOrchestrator(
+      final orchestrator = OmrOrchestrator.withRunners(
         segRunner: _FakeSegmentationRunner(_syntheticClassMap()),
         transformerRunner: _FakeTransformerRunner(const []),
       );
@@ -160,12 +161,12 @@ void main() {
       final classMap = _syntheticClassMap();
       final page = _blankPreprocessedPng();
 
-      final single = await OmrOrchestrator(
+      final single = await OmrOrchestrator.withRunners(
         segRunner: _FakeSegmentationRunner(classMap),
         transformerRunner: _FakeTransformerRunner(['E4']),
       ).recognise(page, title: 'Single');
 
-      final multi = await OmrOrchestrator(
+      final multi = await OmrOrchestrator.withRunners(
         segRunner: _FakeSegmentationRunner(classMap),
         transformerRunner: _FakeTransformerRunner(['E4']),
       ).recogniseMultiPage([page], title: 'Single');

@@ -2,10 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:homr_omr/homr_omr.dart';
+import 'package:homr_flutter/homr_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'capture/crop_screen.dart';
+import 'omr_models.dart';
 
 class OmrResultScreen extends StatefulWidget {
   const OmrResultScreen({super.key, required this.cropResult});
@@ -31,7 +32,7 @@ class _OmrResultScreenState extends State<OmrResultScreen> {
 
   Future<void> _runOmr() async {
     try {
-      final xml = await OmrOrchestrator().recognise(
+      final xml = await OmrOrchestrator(models: demoModels).recognise(
         widget.cropResult.songBytes,
         onProgress: (stage) {
           if (mounted) setState(() => _stage = stage);

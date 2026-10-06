@@ -1,9 +1,11 @@
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:image/image.dart' as img;
 
 import 'artifact_writer.dart';
 import 'capture/image_preprocessor.dart' show applyClahe, claheGrayToRgb, eraseLightPixels;
 import 'inference/encoded_symbol.dart';
+import 'inference/omr_models.dart';
 import 'inference/segmentation_runner.dart';
 import 'inference/transformer_runner.dart';
 import 'pipeline/homr/predictions.dart';
@@ -47,11 +49,22 @@ class OmrOrchestrator {
   final SegmentationRunner _segRunner;
   final TransformerRunner _transformerRunner;
 
-  OmrOrchestrator({
-    SegmentationRunner? segRunner,
-    TransformerRunner? transformerRunner,
-  })  : _segRunner = segRunner ?? SegmentationRunner(),
-        _transformerRunner = transformerRunner ?? TransformerRunner();
+  /// [models] says where the app bundled the three ONNX models; the package
+  /// ships none. See [OmrModels].
+  OmrOrchestrator({required OmrModels models})
+      : _segRunner = SegmentationRunner(models.segnet),
+        _transformerRunner = TransformerRunner(
+          encoderAsset: models.encoder,
+          decoderAsset: models.decoder,
+        );
+
+  /// Injects the inference stages directly — for tests with fake runners.
+  @visibleForTesting
+  OmrOrchestrator.withRunners({
+    required SegmentationRunner segRunner,
+    required TransformerRunner transformerRunner,
+  })  : _segRunner = segRunner,
+        _transformerRunner = transformerRunner;
 
   /// Recognises [preprocessedPng] and returns a MusicXML 4.0 string.
   ///

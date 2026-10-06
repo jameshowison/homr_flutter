@@ -21,7 +21,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:xml/xml.dart';
 
-import 'package:homr_omr/homr_omr.dart';
+import 'package:homr_flutter/homr_flutter.dart';
+import 'package:homr_flutter_demo/omr_models.dart';
 
 // Python reference counts — used for diagnostic output only, not hard assertions.
 const int _refMeasures = 21;
@@ -51,7 +52,7 @@ void main() {
     final stages = <String>[];
     final stopwatch = Stopwatch()..start();
 
-    final musicXml = await OmrOrchestrator().recognise(
+    final musicXml = await OmrOrchestrator(models: demoModels).recognise(
       pngBytes,
       onProgress: (stage) {
         final label = stage.name;

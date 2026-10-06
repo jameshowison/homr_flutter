@@ -13,8 +13,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:xml/xml.dart';
-import 'package:homr_omr/homr_omr.dart';
-import 'package:homr_flutter/eval/musicxml_scoring.dart';
+import 'package:homr_flutter/homr_flutter.dart';
+import 'package:homr_flutter_demo/eval/musicxml_scoring.dart';
+import 'package:homr_flutter_demo/omr_models.dart';
 
 /// Resize [pngBytes] to [targetWidth] px wide (preserving aspect ratio),
 /// matching what ImagePreprocessor does before handing off to the pipeline.
@@ -56,7 +57,7 @@ void main() {
 
       final imgData = await rootBundle.load(imagePath);
       try {
-        final musicXml = await OmrOrchestrator().recognise(
+        final musicXml = await OmrOrchestrator(models: demoModels).recognise(
           imgData.buffer.asUint8List(),
           artifactDir: artifactDir,
         );
@@ -97,7 +98,7 @@ void main() {
 
     String? musicXml;
     try {
-      musicXml = await OmrOrchestrator().recognise(
+      musicXml = await OmrOrchestrator(models: demoModels).recognise(
         pngBytes,
         artifactDir: artifactDir,
       );
@@ -150,7 +151,7 @@ void main() {
 
     String? musicXml;
     try {
-      musicXml = await OmrOrchestrator().recognise(
+      musicXml = await OmrOrchestrator(models: demoModels).recognise(
         pngBytes,
         artifactDir: artifactDir,
       );
@@ -203,7 +204,7 @@ void main() {
 
     String? musicXml;
     try {
-      musicXml = await OmrOrchestrator().recognise(
+      musicXml = await OmrOrchestrator(models: demoModels).recognise(
         pngBytes,
         artifactDir: artifactDir,
       );
@@ -265,7 +266,7 @@ void main() {
 
     String? musicXml;
     try {
-      musicXml = await OmrOrchestrator().recognise(
+      musicXml = await OmrOrchestrator(models: demoModels).recognise(
         pngBytes,
         artifactDir: artifactDir,
       );
@@ -319,7 +320,7 @@ void main() {
 
     String? musicXml;
     try {
-      musicXml = await OmrOrchestrator().recognise(
+      musicXml = await OmrOrchestrator(models: demoModels).recognise(
         pngBytes,
         artifactDir: artifactDir,
       );
@@ -373,7 +374,7 @@ void main() {
 
     String? musicXml;
     try {
-      musicXml = await OmrOrchestrator().recognise(
+      musicXml = await OmrOrchestrator(models: demoModels).recognise(
         pngBytes,
         artifactDir: artifactDir,
       );
@@ -418,7 +419,7 @@ void main() {
 
       final imgData = await rootBundle.load(imagePath);
       try {
-        final musicXml = await OmrOrchestrator().recognise(
+        final musicXml = await OmrOrchestrator(models: demoModels).recognise(
           imgData.buffer.asUint8List(),
           artifactDir: artifactDir,
           pencilGateThreshold: threshold,

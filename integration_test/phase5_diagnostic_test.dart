@@ -6,9 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:image/image.dart' as img;
 
-import 'package:homr_omr/src/inference/segmentation_runner.dart';
-import 'package:homr_omr/src/inference/transformer_runner.dart';
-import 'package:homr_omr/src/pipeline/segmentation_postprocessor.dart';
+import 'package:homr_flutter/src/inference/segmentation_runner.dart';
+import 'package:homr_flutter/src/inference/transformer_runner.dart';
+import 'package:homr_flutter/src/pipeline/segmentation_postprocessor.dart';
+import 'package:homr_flutter_demo/omr_models.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -26,7 +27,7 @@ void main() {
     // ignore: avoid_print
     print('Running segmentation...');
     final sw = Stopwatch()..start();
-    final mask = await SegmentationRunner().runSegmentation(pngBytes);
+    final mask = await SegmentationRunner(demoModels.segnet).runSegmentation(pngBytes);
     // ignore: avoid_print
     print('Segmentation: ${sw.elapsedMilliseconds} ms, mask length=${mask.length}');
 
@@ -116,7 +117,7 @@ void main() {
     print('  Strip size: ${cropped.width}×${cropped.height}');
 
     sw.reset();
-    final symbols = await TransformerRunner().runTransformer(stripPng);
+    final symbols = await TransformerRunner(encoderAsset: demoModels.encoder, decoderAsset: demoModels.decoder).runTransformer(stripPng);
     // ignore: avoid_print
     print('  Transformer: ${sw.elapsedMilliseconds} ms, ${symbols.length} symbols');
 

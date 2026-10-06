@@ -3,8 +3,8 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
-import '../packages/homr_omr/lib/src/pipeline/homr/bounding_boxes.dart';
-import '../packages/homr_omr/lib/src/pipeline/homr/staff_detection.dart';
+import '../packages/homr_flutter/lib/src/pipeline/homr/bounding_boxes.dart';
+import '../packages/homr_flutter/lib/src/pipeline/homr/staff_detection.dart';
 
 // Validates the Dart staff detection port end-to-end against homr's oracle.
 // Uses homr's own staff/clefs masks as input so any divergence is purely in the

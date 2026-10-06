@@ -154,13 +154,13 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  homr_omr:
+  homr_flutter:
     dependency: "direct main"
     description:
-      path: "packages/homr_omr"
+      path: "packages/homr_flutter"
       relative: true
     source: path
-    version: "1.0.0"
+    version: "0.1.0"
   hooks:
     dependency: transitive
     description:
