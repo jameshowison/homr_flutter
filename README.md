@@ -1,8 +1,7 @@
 # homr_flutter
 
 On-device OMR (Optical Music Recognition) for Flutter: a Dart port of
-[homr](https://github.com/liebharc/homr). Phases 0–7 complete — see
-`docs/pipeline_investigation.md` and `docs/homr_flutter_integration.md`.
+[homr](https://github.com/liebharc/homr).
 
 This repo holds two things:
 
