@@ -30,16 +30,20 @@ class OmrException implements Exception {
 
 /// End-to-end OMR pipeline: preprocessed PNG → MusicXML string.
 ///
-/// Input is the binary-thresholded, 1920 px-wide PNG produced by
-/// [ImagePreprocessor] (Phase 3), optionally cropped to the music region by
-/// the user in [CropScreen].
+/// Input is a colour (or grayscale) image of printed music, ideally cropped to
+/// the music region — no binarization needed. It is resized to 1920 px wide
+/// and CLAHE-adjusted here, as Python homr does.
 ///
 /// Pipeline:
+///   0. Resize to 1920 wide + CLAHE
 ///   1. SegNet segmentation (Phase 4) → class mask
 ///   2. homr anchor+fragment staff detection (Phase 7) → Staff grid per staff
 ///   3. Staff strip crop + transformer (Phase 4/5 bridge) → EncodedSymbol list per staff
 ///   4. MusicXML assembly (Phase 5) → MusicXML string
 class OmrOrchestrator {
+  /// Python homr's `resize.calc_target_image_size` target width.
+  static const int _homrWidth = 1920;
+
   final SegmentationRunner _segRunner;
   final TransformerRunner _transformerRunner;
 
@@ -147,8 +151,19 @@ class OmrOrchestrator {
     int? pencilGateThreshold,
   }) async {
     // Decode once; used for CLAHE, dimensions, and transformer crops.
-    final fullImage = img.decodeImage(preprocessedPng);
-    if (fullImage == null) throw const OmrException('Failed to decode preprocessed PNG');
+    final decoded = img.decodeImage(preprocessedPng);
+    if (decoded == null) throw const OmrException('Failed to decode preprocessed PNG');
+
+    // Exactly 1920 px wide, up or down — Python homr's resize.py, which runs
+    // before CLAHE and segmentation. SegNet tiles 320 px patches at the
+    // image's own scale, so it is trained on staff spacing at that width; a
+    // crop of half a page arriving at 960 px read 31 of ~82 notes, and 82
+    // once resized ("I Love the Mountains", see
+    // integration_test/threshold_strategy_test.dart). The benchmark photos
+    // (1727-2055 px) never showed it because they were already close.
+    final fullImage = decoded.width == _homrWidth
+        ? decoded
+        : img.copyResize(decoded, width: _homrWidth);
 
     // Optional pencil gate: whiten pixels above threshold before CLAHE so that
     // pencil annotations (typically 160–220 gray) are treated as background.

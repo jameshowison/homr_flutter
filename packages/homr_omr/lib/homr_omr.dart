@@ -3,4 +3,4 @@
 library;
 
 export 'src/omr_orchestrator.dart' show OmrOrchestrator, OmrStage, OmrException;
-export 'src/capture/image_preprocessor.dart' show preprocessImage, PreprocessResult;
+export 'src/capture/image_preprocessor.dart' show preprocessImage, PreprocessResult, thresholdImage, ThresholdResult, otsuThreshold;

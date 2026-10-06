@@ -5,15 +5,26 @@ import 'package:flutter/foundation.dart' show compute;
 import 'package:image/image.dart' as img;
 
 const int _targetWidth = 1920;
-const int _thresholdValue = 128;
 
 typedef PreprocessResult = ({Uint8List original, Uint8List thresholded});
+typedef ThresholdResult = ({Uint8List png, int threshold});
 
 /// Resize to [_targetWidth] px wide, then produce two PNGs:
 ///   original    — resized full-colour (before any thresholding)
-///   thresholded — grayscale + binary threshold at [_thresholdValue]
+///   thresholded — grayscale + binary threshold at the page's [otsuThreshold]
+///
+/// To binarize only the music, crop [PreprocessResult.original] and pass the
+/// crop to [thresholdImage] instead: the threshold is then chosen from the
+/// music alone, not from margins, table and shadows.
 Future<PreprocessResult> preprocessImage(Uint8List jpegBytes) {
   return compute(_process, jpegBytes);
+}
+
+/// Binarizes [imageBytes] (any decodable format) at its own [otsuThreshold],
+/// with no resize — for a crop already taken from [preprocessImage]'s
+/// `original`, so it is at the recogniser's 1920 px page scale.
+Future<ThresholdResult> thresholdImage(Uint8List imageBytes) {
+  return compute(_threshold, imageBytes);
 }
 
 PreprocessResult _process(Uint8List jpegBytes) {
@@ -22,16 +33,67 @@ PreprocessResult _process(Uint8List jpegBytes) {
 
   final resized = img.copyResize(decoded, width: _targetWidth);
   final originalPng = img.encodePng(resized);
-
   final gray = img.grayscale(resized);
+  _binarize(gray, otsuThreshold(gray));
+  return (original: originalPng, thresholded: img.encodePng(gray));
+}
+
+ThresholdResult _threshold(Uint8List imageBytes) {
+  final decoded = img.decodeImage(imageBytes);
+  if (decoded == null) throw Exception('Could not decode image');
+  final gray = img.grayscale(decoded);
+  final t = otsuThreshold(gray);
+  _binarize(gray, t);
+  return (png: img.encodePng(gray), threshold: t);
+}
+
+/// Pixels darker than [threshold] become black, the rest white.
+void _binarize(img.Image gray, int threshold) {
   for (final pixel in gray) {
-    final v = pixel.r < _thresholdValue ? 0 : 255;
+    final v = pixel.r < threshold ? 0 : 255;
     pixel.r = v;
     pixel.g = v;
     pixel.b = v;
   }
+}
 
-  return (original: originalPng, thresholded: img.encodePng(gray));
+/// Otsu's threshold for a grayscale image: the cut that best separates its
+/// histogram into two classes (ink and paper).
+///
+/// Replaces a fixed 128. That value came from a dark-ink photo with
+/// bleed-through (Happy Farmer, where anything from ~102 to ~153 worked and
+/// 179+ let the bleed-through back in as a phantom staff), but a photo whose
+/// print comes out grey has staff lines at ~150-200, so a fixed 128 erased
+/// every line and the recogniser found no staves (I Love the Mountains, Oct
+/// 2026). Otsu adapts to both: ~123 on the Happy Farmer book photos, ~110 on the
+/// retake, ~212 on the Mountains crop.
+int otsuThreshold(img.Image gray) {
+  final hist = List<int>.filled(256, 0);
+  var n = 0;
+  for (final pixel in gray) {
+    hist[pixel.r.toInt().clamp(0, 255)]++;
+    n++;
+  }
+  var sum = 0.0;
+  for (var i = 0; i < 256; i++) {
+    sum += i * hist[i];
+  }
+  var sumB = 0.0, wB = 0, best = -1.0, threshold = 128;
+  for (var i = 0; i < 256; i++) {
+    wB += hist[i];
+    if (wB == 0) continue;
+    final wF = n - wB;
+    if (wF == 0) break;
+    sumB += i * hist[i];
+    final mB = sumB / wB, mF = (sum - sumB) / wF;
+    final between = wB * wF * (mB - mF) * (mB - mF);
+    if (between > best) {
+      best = between;
+      // Bins 0..i are the ink class, and [_binarize] blackens `< threshold`.
+      threshold = i + 1;
+    }
+  }
+  return threshold;
 }
 
 /// Apply CLAHE (Contrast Limited Adaptive Histogram Equalisation) using the

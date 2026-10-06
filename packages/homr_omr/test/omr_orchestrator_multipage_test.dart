@@ -10,7 +10,9 @@ import 'package:homr_omr/src/inference/encoded_symbol.dart';
 import 'package:homr_omr/src/inference/segmentation_runner.dart';
 import 'package:homr_omr/src/inference/transformer_runner.dart';
 
-const _width = 300;
+// 1920 wide so the orchestrator's homr resize (to exactly 1920) is a no-op
+// and this map still lines up with the image it stands in for.
+const _width = 1920;
 const _height = 200;
 
 /// A SegNet-shaped class-index map (one byte per pixel: 3 = clef, 4 = staff

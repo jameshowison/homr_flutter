@@ -1,5 +1,14 @@
 # homr Flutter Integration — Build Plan
 
+> **Superseded preprocessing (Oct 2026).** The binary threshold described below
+> (127 / 50%) is no longer used by the app. Input is now a colour crop;
+> `OmrOrchestrator` resizes it to exactly 1920 px wide (as `homr/resize.py`
+> does) and applies CLAHE. The threshold was erasing grey staff lines on
+> photographed pages, and the missing resize was what really broke small
+> crops. Evidence: `integration_test/threshold_strategy_test.dart`, and
+> `violin_practice_companion/docs/explore.md` (binarization section).
+
+
 ## Status
 Phases 0–6 complete. Ready to begin Phase 7 (benchmarking).
 
