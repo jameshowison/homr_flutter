@@ -22,6 +22,109 @@ python3 packages/homr_flutter/tool/fetch_models.py assets/omr_models
 To release: bump `version` and `CHANGELOG.md` in the package, commit, tag
 `vX.Y.Z`, push the tag; dependent apps move their `ref:` to it.
 
+## How the port was made
+
+This is an attempt to run [homr](https://github.com/liebharc/homr) on a phone.
+homr does the hard part: its two ONNX models (a segmentation network that
+labels every pixel, and a transformer that reads one staff at a time) and the
+Python pipeline that connects them. We did not train or change any models. What
+we did was port the Python pipeline to Dart, stage by stage, so that homr's own
+models could run on-device through `flutter_onnxruntime`:
+
+> resize to 1920 px wide → CLAHE contrast adjustment → segmentation → staff
+> detection → per-staff crop and straightening → transformer → MusicXML
+
+Most of the work, and most of the mistakes, came from places where the Dart
+version quietly differed from homr's. Our general lesson was to follow homr
+closely rather than simplify it, and to check against homr itself rather than
+against our own sense of what looked right. The notes below record what we ran
+into, in roughly the order we hit it. The code was written largely with AI
+coding assistants, so it is likely there are things here we've misunderstood;
+corrections are very welcome.
+
+**No OpenCV in Dart.** homr's staff detection relies on three OpenCV
+operations: finding connected shapes (`findContours`), fitting a rotated
+rectangle around each one (`minAreaRect`), and growing and shrinking shapes
+(`dilate`/`erode`). There is no OpenCV built into Dart. Bindings to the native
+library exist, but we preferred not to add a large native dependency for three
+operations, so they are written out in pure Dart in
+`packages/homr_flutter/lib/src/pipeline/homr/geometry.dart` (connected
+components, a convex hull with rotating calipers, and plain morphology). It
+took some care to reproduce homr's conventions for rectangle angles exactly.
+
+**Staff detection, first attempt.** Our first version did not port homr's staff
+detection. It tried something simpler: counting staff-line pixels row by row in
+the segmentation output and looking for five evenly spaced peaks. It worked on
+a few images, but it needed its thresholds re-tuned for each new photo, and on
+one photo it gave different answers from run to run. We came to think we were
+fitting the method to our handful of test images, and that it had discarded
+information (the clef and symbol classes) that homr relies on.
+
+**Staff detection, ported.** We then ported homr's actual approach: find short
+staff-line fragments, anchor staves on clefs, join fragments into lines and
+lines into staves, and resample each staff into a grid. To avoid fitting the
+port to our images all over again, we used the Python package as an *oracle*.
+`tool/homr_oracle.py` runs homr itself on an image and saves each intermediate
+result, and three Dart tools compare the port against it, layer by layer:
+
+| Check | What it compares |
+|---|---|
+| `tool/validate_fragments.dart` | staff-line fragments, before and after splitting overly wide ones |
+| `tool/validate_detection.dart` | detected staves, given homr's own masks as input |
+| `tool/validate_glue.dart` | detected staves, from homr's raw segmentation output |
+
+On the four benchmark photos (re-run in October 2026), the fragments the port
+extracts are identical to homr's (109/109, 95/95, 148/148 and 288/288). It finds
+the same number of staves on every image (4, 4, 5 and 8), and their line
+positions agree with homr's to a median of 0.01–0.06 px (at most 5.3 px). One
+known difference remains, which we have not tracked down: after the step that
+splits overly wide fragments, the port produces about 7–9% more pieces than
+homr does. It doesn't seem to change the staves, but it is a place where the
+port is not yet faithful. Bar-line and rest anchors, which homr also uses to
+find staves, are not ported, so the oracle compares clef-anchored detection on
+both sides.
+
+**Smaller things that mattered.**
+
+- *The `image` package and 1-bit PNGs.* Converting a 1-bit PNG to grayscale
+  made every pixel white, so the segmentation network saw an empty page.
+- *The transformer's input format.* homr crops each staff tightly, straightens
+  it along its middle line, and centres it on a 1280×256 canvas. Until we did
+  exactly the same, the transformer misread octaves and dotted rhythms. Two
+  Suzuki pieces went from 45% and 29% to 100% once the crop matched.
+- *Resizing.* homr resizes every image to 1920 px wide before anything else.
+  The port didn't, which went unnoticed because our benchmark photos were
+  already about that size. A crop of half a page was then read at half the
+  scale the models expect, and lost most of its notes. The orchestrator now
+  resizes as homr does.
+- *Thresholding.* Early on, we binarized images (pure black and white) to
+  suppress bleed-through from the reverse side of the page. Once staff
+  detection followed homr, that stopped being necessary, and a fixed threshold
+  turned out to erase faint staff lines in some photos, so the port now passes
+  colour images to the pipeline, as homr does
+  (`integration_test/threshold_strategy_test.dart` has the comparison).
+
+**Not ported, or different.** homr's automatic page crop (`autocrop`) is not
+ported; the app asks the user to crop to the music instead. Title detection is
+not ported. Staves are read one after another into a single part, so a system
+with two staves, such as a duet, comes out as alternating lines rather than
+two parts. Only iOS has been tried.
+
+**Re-running the validation.** With a Python environment that has homr
+installed (we used homr 0.6.2):
+
+```bash
+~/.local/share/uv/tools/homr/bin/python tool/homr_oracle.py   # writes /tmp/oracle_*
+for t in lr2 lr hf gav; do
+  dart run tool/validate_fragments.dart $t
+  dart run tool/validate_detection.dart $t
+  dart run tool/validate_glue.dart $t
+done
+```
+
+`docs/pipeline_investigation.md` has the longer story of the staff-detection
+work.
+
 ## OMR accuracy (Suzuki Book 1)
 
 Evaluated against ground-truth MusicXML on iPhone 17 simulator (2026-06-09).

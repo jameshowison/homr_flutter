@@ -29,7 +29,8 @@ The fix ports homr's algorithm faithfully into `lib/pipeline/homr/`:
 **Validation method (avoids re-overfitting):** the local Python `homr` install is
 used as an oracle. `tool/validate_fragments.dart`, `validate_detection.dart`,
 `validate_glue.dart` diff each Dart layer against homr's own output on the
-benchmark masks (dumped via the script formerly at `/tmp/homr_oracle.py`):
+benchmark masks (dumped by `tool/homr_oracle.py`, recreated Oct 2026 after the
+original `/tmp` copy was lost):
 - fragment extraction (pre-break): **bit-exact, 109/109, Δ=0.00**
 - full staff grids: median |Δy| **0.05–0.10 px**, max < 4.3 px, staff counts 4/5/8 = homr exactly.
 

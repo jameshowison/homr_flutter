@@ -2,7 +2,8 @@
 
 On-device optical music recognition (OMR) for Flutter. You give it a photo or scan of printed sheet music, and it gives back MusicXML 4.0, with no server and no network at runtime.
 
-It's a Dart port of [homr](https://github.com/liebharc/homr) by Christian Liebhardt, and runs homr's own ONNX models through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). The pipeline follows homr's: resize to 1920 px wide, then contrast adjustment (CLAHE), segmentation, staff detection, a transformer read of each staff, and MusicXML assembly. Each stage has been checked against the Python original.
+It's a Dart port of [homr](https://github.com/liebharc/homr) by Christian Liebhardt, and runs homr's own ONNX models through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). The pipeline follows homr's: resize to 1920 px wide, then contrast adjustment (CLAHE), segmentation, staff detection, a transformer read of each staff, and MusicXML assembly. Each stage has been checked against the Python original. How the port was made, what went wrong along the way, and how it is checked
+against homr are described in the [repository README](https://github.com/jameshowison/homr_flutter#how-the-port-was-made).
 
 > **Status: 0.x.** The API may change between minor versions until 1.0. It has been verified on iOS (devices and simulator). Android and macOS are what `flutter_onnxruntime` supports, but haven't been tried.
 
