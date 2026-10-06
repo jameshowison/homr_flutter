@@ -5,30 +5,21 @@ PODS:
   - flutter_onnxruntime (0.0.1):
     - Flutter
     - onnxruntime-objc (= 1.22.0)
-  - image_cropper (0.0.5):
-    - Flutter
-    - TOCropViewController (~> 3.1.2)
-  - integration_test (0.0.1):
-    - Flutter
   - onnxruntime-c (1.22.0)
   - onnxruntime-objc (1.22.0):
     - onnxruntime-objc/Core (= 1.22.0)
   - onnxruntime-objc/Core (1.22.0):
     - onnxruntime-c (= 1.22.0)
-  - TOCropViewController (3.1.2)
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
   - flutter_doc_scanner (from `.symlinks/plugins/flutter_doc_scanner/ios`)
   - flutter_onnxruntime (from `.symlinks/plugins/flutter_onnxruntime/ios`)
-  - image_cropper (from `.symlinks/plugins/image_cropper/ios`)
-  - integration_test (from `.symlinks/plugins/integration_test/ios`)
 
 SPEC REPOS:
   trunk:
     - onnxruntime-c
     - onnxruntime-objc
-    - TOCropViewController
 
 EXTERNAL SOURCES:
   Flutter:
@@ -37,20 +28,13 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_doc_scanner/ios"
   flutter_onnxruntime:
     :path: ".symlinks/plugins/flutter_onnxruntime/ios"
-  image_cropper:
-    :path: ".symlinks/plugins/image_cropper/ios"
-  integration_test:
-    :path: ".symlinks/plugins/integration_test/ios"
 
 SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_doc_scanner: d930bcd7db6f69805d882330fc9b6f74a9db5c9e
   flutter_onnxruntime: 515c2ab17b67fb027964ebbf2d02329771a482de
-  image_cropper: fca51f94982730acae168c4b5d691e0f11aeb259
-  integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
   onnxruntime-c: 7f778680e96145956c0a31945f260321eed2611a
   onnxruntime-objc: 83d28b87525bd971259a66e153ea32b5d023de19
-  TOCropViewController: a916930c465b5d9445a74d95e0c0da931771b4df
 
 PODFILE CHECKSUM: 5f332eb16eeec6909ea3f704668d1621bab934fa
 
