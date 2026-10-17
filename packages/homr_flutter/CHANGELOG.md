@@ -1,3 +1,13 @@
+## 0.1.1
+
+- Draw accidentals. Each note's `<alter>` (the sounding pitch the model
+  predicts) is now accompanied by an `<accidental>` wherever a sign is printed:
+  where the alteration differs from the key signature and the earlier notes in
+  the bar. Before, no `<accidental>` was written at all, so renderers that take
+  MusicXML literally (Verovio) drew an A♯ in G major as a plain A.
+- `<alter>` is written between `<step>` and `<octave>`, as MusicXML requires
+  (it came after `<octave>`).
+
 ## 0.1.0
 
 First versioned release, as a dependency for violin_practice_companion; not yet

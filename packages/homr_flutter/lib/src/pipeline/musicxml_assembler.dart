@@ -510,14 +510,15 @@ XmlElement _buildNoteOrRest(
       note.children.add(_el('rest', []));
     }
   } else {
+    // MusicXML orders <pitch> as step, alter, octave. The alter is the
+    // sounding pitch; whether a sign is drawn is [_addAccidentals]'s job.
+    final lift = sym.lift;
     final pitchEl = _el('pitch', [
       _textEl('step', pitch.substring(0, 1)),
+      if (lift != '.' && lift != '_' && _liftToAlter.containsKey(lift))
+        _intEl('alter', _liftToAlter[lift]!),
       _intEl('octave', int.parse(pitch.substring(1))),
     ]);
-    final lift = sym.lift;
-    if (lift != '.' && lift != '_' && _liftToAlter.containsKey(lift)) {
-      pitchEl.children.add(_intEl('alter', _liftToAlter[lift]!));
-    }
     note.children.add(pitchEl);
   }
 
@@ -954,7 +955,98 @@ List<XmlElement> _buildMeasures(List<EncodedSymbol> voice, _State state) {
   }
 
   _addBeaming(measures);
+  _addAccidentals(measures);
   return measures;
+}
+
+// ── Drawn accidentals ─────────────────────────────────────────────────────────
+
+/// Adds the `<accidental>` each note needs drawn.
+///
+/// The transformer's `lift` is the SOUNDING alteration — an F under a G-major
+/// signature comes out `#` though no sign is printed — and it is written as
+/// `<alter>`, which in MusicXML is pitch only. Whether a sign is visible is a
+/// separate element, `<accidental>`, and a renderer that takes the file
+/// literally (Verovio) draws none without it: a scanned A♯ in G major played
+/// as A♯ but was engraved as a plain A.
+///
+/// A sign is needed where a note's alteration differs from what the key
+/// signature and the earlier signs in its bar imply, on that step, octave and
+/// staff. A note tied over from the bar before is never re-marked.
+void _addAccidentals(List<XmlElement> measures) {
+  var fifths = 0;
+  for (final measure in measures) {
+    final inBar = <String, int>{};
+    for (final child in measure.childElements) {
+      if (child.name.local == 'attributes') {
+        final f = child
+            .findElements('key')
+            .firstOrNull
+            ?.findElements('fifths')
+            .firstOrNull
+            ?.innerText;
+        if (f != null) fifths = int.tryParse(f.trim()) ?? fifths;
+        continue;
+      }
+      if (child.name.local != 'note') continue;
+      final pitchEl = child.findElements('pitch').firstOrNull;
+      if (pitchEl == null) continue;
+      if (child.findElements('accidental').isNotEmpty) continue;
+      final tiedOver = child
+          .findAllElements('tied')
+          .any((t) => t.getAttribute('type') == 'stop');
+      if (tiedOver) continue;
+      final step = pitchEl.findElements('step').first.innerText;
+      final octave = pitchEl.findElements('octave').firstOrNull?.innerText;
+      final alter = int.tryParse(
+              pitchEl.findElements('alter').firstOrNull?.innerText ?? '') ??
+          0;
+      final staff = child.findElements('staff').firstOrNull?.innerText ?? '1';
+      final key = '$staff|$step$octave';
+      if (alter == (inBar[key] ?? _keyAlter(fifths, step))) continue;
+      final sign = _alterToAccidental[alter];
+      if (sign == null) continue;
+      inBar[key] = alter;
+      _insertInOrder(child, _textEl('accidental', sign), _afterAccidental);
+    }
+  }
+}
+
+const Map<int, String> _alterToAccidental = {
+  0: 'natural',
+  1: 'sharp',
+  -1: 'flat',
+  2: 'double-sharp',
+  -2: 'flat-flat',
+};
+
+/// The alteration [fifths] gives [step] by key signature alone.
+int _keyAlter(int fifths, String step) {
+  if (fifths > 0 && 'FCGDAEB'.substring(0, min(fifths, 7)).contains(step)) {
+    return 1;
+  }
+  if (fifths < 0 && 'BEADGCF'.substring(0, min(-fifths, 7)).contains(step)) {
+    return -1;
+  }
+  return 0;
+}
+
+/// `<note>` children that follow `<accidental>` in the MusicXML schema.
+const _afterAccidental = {
+  'time-modification', 'stem', 'notehead', 'notehead-text', 'staff', 'beam',
+  'notations', 'lyric', 'play', 'listen',
+};
+
+/// Inserts [el] into [parent] before its first child named in [before], or at
+/// the end when there is none.
+void _insertInOrder(XmlElement parent, XmlElement el, Set<String> before) {
+  final i = parent.children
+      .indexWhere((c) => c is XmlElement && before.contains(c.name.local));
+  if (i < 0) {
+    parent.children.add(el);
+  } else {
+    parent.children.insert(i, el);
+  }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
