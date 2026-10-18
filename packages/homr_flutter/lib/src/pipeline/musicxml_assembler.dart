@@ -470,8 +470,10 @@ void _buildArticulations(XmlElement note, String artic, String tupletMark, _Stat
         notation.children.add(_el('slur', [], attrs: {'type': 'stop'}));
       case 'tieStart':
         notation.children.add(_el('tied', [], attrs: {'type': 'start'}));
+        _addTie(note, 'start');
       case 'tieStop':
         notation.children.add(_el('tied', [], attrs: {'type': 'stop'}));
+        _addTie(note, 'stop');
     }
   }
 
@@ -955,8 +957,93 @@ List<XmlElement> _buildMeasures(List<EncodedSymbol> voice, _State state) {
   }
 
   _addBeaming(measures);
+  _slursToTies(measures);
   _addAccidentals(measures);
   return measures;
+}
+
+// ── Ties ──────────────────────────────────────────────────────────────────────
+
+/// Rewrites each slur that is really a tie as `<tie>` + `<tied>`.
+///
+/// The model has no tie token. homr's training data turns MusicXML `<tied>`
+/// and kern `[`/`]` into `slurStart`/`slurStop`, so every tie comes out as a
+/// slur: drawn right, but a player of the file strikes the held note again.
+/// A slur from one note to the very next in its staff and voice, at the same
+/// pitch, is a tie, unless either note carries an articulation: repeated
+/// notes under a slur with tenuto or staccato marks are portato and stay
+/// slurs. Grace and chord notes are left alone.
+///
+/// Runs before [_addAccidentals], so a note tied over a barline isn't
+/// re-marked.
+void _slursToTies(List<XmlElement> measures) {
+  final last = <String, XmlElement>{};
+  final open = <String, XmlElement>{};
+  for (final measure in measures) {
+    for (final note in measure.findElements('note')) {
+      if (note.findElements('grace').isNotEmpty ||
+          note.findElements('chord').isNotEmpty) {
+        continue;
+      }
+      final key = '${note.findElements('staff').firstOrNull?.innerText ?? '1'}'
+          '|${note.findElements('voice').firstOrNull?.innerText ?? '1'}';
+      final prev = last[key];
+      last[key] = note;
+      final stop = _slur(note, 'stop');
+      if (stop != null) {
+        final start = open.remove(key);
+        final startSlur = start == null ? null : _slur(start, 'start');
+        if (start != null &&
+            startSlur != null &&
+            identical(start, prev) &&
+            _samePitch(start, note) &&
+            !_hasArticulation(start) &&
+            !_hasArticulation(note)) {
+          startSlur.replace(_el('tied', [], attrs: {'type': 'start'}));
+          _addTie(start, 'start');
+          stop.replace(_el('tied', [], attrs: {'type': 'stop'}));
+          _addTie(note, 'stop');
+        }
+      }
+      if (_slur(note, 'start') != null) open[key] = note;
+    }
+  }
+}
+
+XmlElement? _slur(XmlElement note, String type) => note
+    .findElements('notations')
+    .expand((n) => n.findElements('slur'))
+    .where((s) => s.getAttribute('type') == type)
+    .firstOrNull;
+
+bool _samePitch(XmlElement a, XmlElement b) {
+  final pa = a.findElements('pitch').firstOrNull;
+  final pb = b.findElements('pitch').firstOrNull;
+  if (pa == null || pb == null) return false;
+  String text(XmlElement p, String name) =>
+      p.findElements(name).firstOrNull?.innerText ?? '';
+  return ['step', 'alter', 'octave'].every((n) => text(pa, n) == text(pb, n));
+}
+
+bool _hasArticulation(XmlElement note) => note
+    .findElements('notations')
+    .expand((n) => n.findElements('articulations'))
+    .any((a) => a.childElements.isNotEmpty);
+
+/// Adds the sounding `<tie>` after `<duration>`, or after a `<tie>` already
+/// there, so a note in the middle of a chain reads stop, then start.
+void _addTie(XmlElement note, String type) {
+  final children = note.children;
+  var at = children.lastIndexWhere((c) => c is XmlElement && c.name.local == 'tie');
+  if (at < 0) {
+    at = children.indexWhere((c) => c is XmlElement && c.name.local == 'duration');
+  }
+  final tie = _el('tie', [], attrs: {'type': type});
+  if (at < 0) {
+    children.add(tie);
+  } else {
+    children.insert(at + 1, tie);
+  }
 }
 
 // ── Drawn accidentals ─────────────────────────────────────────────────────────
