@@ -1,3 +1,13 @@
+## 0.1.2
+
+- Write ties. The model has no tie token (homr's training data maps MusicXML
+  `<tied>` and kern ties to `slurStart`/`slurStop`), so every tie came out as
+  a `<slur>`: drawn right, but played as two struck notes. A slur from one
+  note to the very next in its staff and voice, at the same pitch, is now
+  written as `<tie>` + `<tied>`, unless either note has an articulation
+  (portato with tenuto marks stays a slur). A note tied over a barline is not
+  given its accidental again.
+
 ## 0.1.1
 
 - Draw accidentals. Each note's `<alter>` (the sounding pitch the model
