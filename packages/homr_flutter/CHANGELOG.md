@@ -1,3 +1,8 @@
+## 0.2.0
+
+- Require `xml` ^7.0.1 (was ^6.0.0), so apps can use `pdf` 3.13 and
+  `printing` 5.15, which need it. No change to the MusicXML written.
+
 ## 0.1.2
 
 - Write ties. The model has no tie token (homr's training data maps MusicXML

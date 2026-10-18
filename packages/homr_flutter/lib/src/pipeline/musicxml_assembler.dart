@@ -407,8 +407,8 @@ class _State {
 
 XmlElement _el(String name, List<XmlNode> children, {Map<String, String>? attrs}) =>
     XmlElement(
-      XmlName(name),
-      (attrs ?? {}).entries.map((e) => XmlAttribute(XmlName(e.key), e.value)).toList(),
+      XmlName.parts(name),
+      (attrs ?? {}).entries.map((e) => XmlAttribute(XmlName.parts(e.key), e.value)).toList(),
       children,
     );
 
