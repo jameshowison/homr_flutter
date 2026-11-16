@@ -1,3 +1,10 @@
+## 0.3.2
+
+- A time signature over nothing but rests gets the commonest top digit for
+  its denominator (4/4, 2/2, 6/8) instead of the next one's. Borrowing made
+  the next time signature a restatement, so a 4/4 rest then a 3/4 rest came
+  out as 3/4 throughout, the printed 3/4 lost.
+
 ## 0.3.1
 
 - Write a multi-measure rest of n bars as n bars of whole-bar rest

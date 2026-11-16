@@ -366,13 +366,19 @@ bool _isBarStart(String rhythm) =>
 /// whole piece (find_division_and_time_signature_nominator), which turns a
 /// medley of 3/4 and 4/4 halves into "7/4". Here each time signature is
 /// measured over its own stretch. Multi-measure rests are not bars of the
-/// meter and are left out; a stretch with no other bar (rests under the
-/// opening time signature) takes the next stretch's length, and the
+/// meter and are left out. A stretch of nothing but rests can't say what its
+/// top digit was, so it gets the commonest one for its denominator (4/4,
+/// 2/2, 6/8) — not the next stretch's, which would make the next time
+/// signature look like a restatement and lose it: a medley opening with a
+/// rest in 4/4 and another in 3/4 kept only the 3/4, on the wrong bar. A
+/// stretch with no bars at all takes the next stretch's length, and the
 /// whole-piece median is the last resort.
 (int, List<_Frac>) _findDivisionAndNominator(List<_Chord> chords) {
   var common = 4; // start with quarter note as minimum
   final all = <_Frac>[];
   final stretches = <List<_Frac>>[];
+  final restOnly = <bool>[]; // per stretch: has multi-measure rests
+  final denominators = <int>[];
   var measureAccum = _Frac.zero;
   var multiRest = false;
 
@@ -381,6 +387,7 @@ bool _isBarStart(String rhythm) =>
       all.add(measureAccum);
       if (stretches.isNotEmpty) stretches.last.add(measureAccum);
     }
+    if (multiRest && restOnly.isNotEmpty) restOnly[restOnly.length - 1] = true;
     measureAccum = _Frac.zero;
     multiRest = false;
   }
@@ -392,6 +399,8 @@ bool _isBarStart(String rhythm) =>
     } else if (first.startsWith('timeSignature')) {
       if (measureAccum > _Frac.zero) endMeasure();
       stretches.add([]);
+      restOnly.add(false);
+      denominators.add(int.tryParse(first.split('/').last) ?? 4);
     } else {
       if (chord.symbols.any((s) => s.rhythm.startsWith('rest') && s.rhythm.endsWith('m'))) {
         multiRest = true;
@@ -406,12 +415,20 @@ bool _isBarStart(String rhythm) =>
   endMeasure();
 
   final whole = _median(all) ?? _Frac.one;
-  final nominators = List<_Frac?>.generate(stretches.length, (i) => _median(stretches[i]));
+  final nominators = List<_Frac?>.generate(
+      stretches.length,
+      (i) => _median(stretches[i]) ??
+          (restOnly[i] ? _commonBar(denominators[i]) : null));
   for (var i = nominators.length - 1; i >= 0; i--) {
     nominators[i] ??= i + 1 < nominators.length ? nominators[i + 1] : whole;
   }
   return (common, [for (final n in nominators) n!]);
 }
+
+/// The commonest bar length, in whole notes, for a time signature over
+/// [denominator]: 4/4, 2/2, 6/8.
+_Frac _commonBar(int denominator) =>
+    denominator == 8 ? const _Frac(3, 4) : _Frac.one;
 
 _Frac? _median(List<_Frac> values) {
   if (values.isEmpty) return null;

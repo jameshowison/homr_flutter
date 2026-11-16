@@ -46,12 +46,20 @@ void main() {
     expect(_times(xml), ['1:7/8']);
   });
 
-  test('a time signature over a multi-measure rest takes the next stretch', () {
+  test('a time signature over rests alone is common time, not the next one', () {
+    // 4/4 rests, then 3/4: the 3/4 must stay where it was printed.
     final xml = _assemble([
       _sym('timeSignature/4'), _sym('rest_5m'), _sym('barline'),
       _sym('timeSignature/4'), ..._bars(3, 3),
     ]);
-    expect(_times(xml), ['1:3/4', '6:3/4']); // after five bars of rest
+    expect(_times(xml), ['1:4/4', '6:3/4']); // after five bars of rest
+  });
+
+  test('a lone time signature over rests and music measures the music', () {
+    final xml = _assemble([
+      _sym('timeSignature/4'), _sym('rest_2m'), _sym('barline'), ..._bars(3, 3),
+    ]);
+    expect(_times(xml), ['1:3/4']);
   });
 
   test('a restatement with no note between is collapsed', () {
