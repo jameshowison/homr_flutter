@@ -1,3 +1,11 @@
+## 0.3.1
+
+- Write a multi-measure rest of n bars as n bars of whole-bar rest
+  (`<rest measure="yes"/>`), not one bar with `<multiple-rest>n`. The model
+  gives the rest one bar, so the renderer folded the n−1 bars after it — the
+  music — into the rest: a tune's first bars disappeared behind a "5". Real
+  bars also give playback the silence.
+
 ## 0.3.0
 
 - Keep the time signatures the model reads, not just the first, so a piece

@@ -51,7 +51,7 @@ void main() {
       _sym('timeSignature/4'), _sym('rest_5m'), _sym('barline'),
       _sym('timeSignature/4'), ..._bars(3, 3),
     ]);
-    expect(_times(xml), ['1:3/4', '2:3/4']);
+    expect(_times(xml), ['1:3/4', '6:3/4']); // after five bars of rest
   });
 
   test('a restatement with no note between is collapsed', () {
@@ -68,5 +68,25 @@ void main() {
       ..._bars(2, 4),
     ]);
     expect(_times(xml), ['1:4/4']);
+  });
+
+  test('a multi-measure rest is written as that many bars of rest', () {
+    final xml = _assemble([
+      _sym('timeSignature/4'), _sym('rest_3m'), _sym('barline'), ..._bars(2, 3),
+    ]);
+    final doc = XmlDocument.parse(xml);
+    expect(doc.findAllElements('multiple-rest'), isEmpty);
+    final measures = doc.findAllElements('measure').toList();
+    expect(measures, hasLength(5));
+    final divisions = int.parse(doc.findAllElements('divisions').first.innerText);
+    for (final m in measures.take(3)) {
+      final notes = m.findElements('note').toList();
+      expect(notes, hasLength(1));
+      expect(notes.single.getElement('rest')!.getAttribute('measure'), 'yes');
+      expect(int.parse(notes.single.getElement('duration')!.innerText),
+          3 * divisions); // a full 3/4 bar
+    }
+    expect(measures[3].findElements('note'), hasLength(3));
+    expect(_times(xml), ['1:3/4']);
   });
 }

@@ -939,12 +939,22 @@ List<XmlElement> _buildMeasures(List<EncodedSymbol> voice, _State state) {
 
     if (rhythm.startsWith('note') || rhythm.startsWith('rest')) {
       if (group.symbols.length == 1 && rhythm.endsWith('m')) {
-        // Multi-measure rest
-        final attr = getOrCreateAttributes();
-        final duration = int.parse(rhythm.split('_')[1].replaceAll('m', ''));
-        attr.children.add(_el('measure-style', [
-          _el('multiple-rest', [XmlText('$duration')]),
-        ]));
+        // Multi-measure rest of n bars: written as n bars of whole-bar rest.
+        // A <multiple-rest> would tell renderers to fold this bar and the
+        // n−1 after it into one, but the model gives it one bar: the bars
+        // it folds are the music that follows (Verovio hid a tune's first
+        // bars behind a rest the model read as 5). Real bars also give
+        // playback the silence.
+        final bars = max(int.tryParse(rhythm.split('_')[1].replaceAll('m', '')) ?? 1, 1);
+        for (var k = 0; k < bars; k++) {
+          if (k > 0) closeMeasure();
+          measure.children.add(_el('note', [
+            _el('rest', [], attrs: {'measure': 'yes'}),
+            _intEl('duration', state.beats),
+            _textEl('voice', '1'),
+            _intEl('staff', 1),
+          ]));
+        }
       } else {
         final positions = group.intoPositions();
         for (int pi = 0; pi < positions.length; pi++) {
