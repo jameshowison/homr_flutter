@@ -1,3 +1,16 @@
+## 0.3.0
+
+- Keep the time signatures the model reads, not just the first, so a piece
+  that changes meter (3/4 → 4/4 → 2/4 …) keeps its changes. A time-signature
+  token in the middle of a bar, or one restating the last with no note
+  between, is still dropped as a mis-fire.
+- The model reads only the denominator; the top digit is now the median bar
+  length of the stretch each time signature governs, not of the whole piece.
+  A piece half in 3/4 and half in 4/4 used to come out "7/4". Multi-measure
+  rests no longer count as bars (a time signature over rests takes the next
+  stretch's meter), and a length that isn't a whole number of beats is
+  written in smaller ones (7/8, never 7/4).
+
 ## 0.2.0
 
 - Require `xml` ^7.0.1 (was ^6.0.0), so apps can use `pdf` 3.13 and

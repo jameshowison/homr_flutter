@@ -289,10 +289,15 @@ List<EncodedSymbol> _deduplicateSymbols(List<EncodedSymbol> voice) {
   String lastKey = '';
   String lastTime = '';
   bool hadBarlineSinceLastNote = false;
+  bool noteSinceBar = false; // a note or rest since the last barline / staff start
+  bool noteSinceTime = false; // a note or rest since the last time signature
   final result = <EncodedSymbol>[];
   for (final sym in voice) {
+    if (_isBarStart(sym.rhythm)) noteSinceBar = false;
     if (sym.rhythm.startsWith('note') || sym.rhythm.startsWith('rest')) {
       hadBarlineSinceLastNote = false;
+      noteSinceBar = true;
+      noteSinceTime = true;
       final capped = _capRhythmAtSixteenth(sym.rhythm);
       result.add(capped == sym.rhythm
           ? sym
@@ -320,11 +325,19 @@ List<EncodedSymbol> _deduplicateSymbols(List<EncodedSymbol> voice) {
         result.add(sym);
       }
     } else if (sym.rhythm.startsWith('timeSignature')) {
-      if (lastTime.isEmpty) {
-        // Lock to the first time signature and drop all subsequent changes.
-        // Suzuki Book 1 (and most beginner repertoire) never changes meter
-        // mid-piece; later tokens are transformer mis-fires on longer note values.
+      // Keep every time signature the model sees: a piece may change meter
+      // (3/4 → 4/4 → 2/4 …). Two kinds of token are dropped as mis-fires:
+      // one in the middle of a bar (the model sometimes fires on a long note
+      // value; a real change only ever starts a bar), and a restatement with
+      // no note since the last one. One that merely restates the meter in
+      // force gets that meter back from its bars (see
+      // [_findDivisionAndNominator]), so it does no harm.
+      final first = lastTime.isEmpty;
+      final atBarStart = !noteSinceBar;
+      final restated = sym.rhythm == lastTime && !noteSinceTime;
+      if (first || (atBarStart && !restated)) {
         lastTime = sym.rhythm;
+        noteSinceTime = false;
         result.add(sym);
       }
     } else {
@@ -334,23 +347,55 @@ List<EncodedSymbol> _deduplicateSymbols(List<EncodedSymbol> voice) {
   return result;
 }
 
+/// Whether [rhythm] ends a bar or a staff, so that what follows starts one.
+bool _isBarStart(String rhythm) =>
+    rhythm == 'newline' ||
+    rhythm.contains('barline') ||
+    rhythm.startsWith('repeat');
+
 // ── Division computation ──────────────────────────────────────────────────────
 
-/// Returns (division, nominatorFrac) where:
+/// Returns (division, nominators) where:
 ///   division = LCM of all duration denominators (whole-note basis)
-///   nominatorFrac = median measure duration in whole-note fractions
+///   nominators = one bar length (in whole notes) per `timeSignature` token,
+///     in order: the median length of the bars that token governs, up to the
+///     next one.
 ///
-/// Mirrors find_division_and_time_signature_nominator.
-(int, _Frac) _findDivisionAndNominator(List<_Chord> chords) {
+/// The model reads only a time signature's denominator (`timeSignature/4`);
+/// the top digit comes from the bars. Upstream homr takes one median over the
+/// whole piece (find_division_and_time_signature_nominator), which turns a
+/// medley of 3/4 and 4/4 halves into "7/4". Here each time signature is
+/// measured over its own stretch. Multi-measure rests are not bars of the
+/// meter and are left out; a stretch with no other bar (rests under the
+/// opening time signature) takes the next stretch's length, and the
+/// whole-piece median is the last resort.
+(int, List<_Frac>) _findDivisionAndNominator(List<_Chord> chords) {
   var common = 4; // start with quarter note as minimum
-  final measureDurations = <_Frac>[];
+  final all = <_Frac>[];
+  final stretches = <List<_Frac>>[];
   var measureAccum = _Frac.zero;
+  var multiRest = false;
+
+  void endMeasure() {
+    if (measureAccum > _Frac.zero && !multiRest) {
+      all.add(measureAccum);
+      if (stretches.isNotEmpty) stretches.last.add(measureAccum);
+    }
+    measureAccum = _Frac.zero;
+    multiRest = false;
+  }
 
   for (final chord in chords) {
-    if (chord.isBarline && measureAccum > _Frac.zero) {
-      measureDurations.add(measureAccum);
-      measureAccum = _Frac.zero;
+    final first = chord.symbols.isEmpty ? '' : chord.symbols.first.rhythm;
+    if (chord.isBarline) {
+      endMeasure();
+    } else if (first.startsWith('timeSignature')) {
+      if (measureAccum > _Frac.zero) endMeasure();
+      stretches.add([]);
     } else {
+      if (chord.symbols.any((s) => s.rhythm.startsWith('rest') && s.rhythm.endsWith('m'))) {
+        multiRest = true;
+      }
       final d = chord.duration;
       if (d > _Frac.zero) {
         common = _lcm(common, d.reduced.den);
@@ -358,21 +403,23 @@ List<EncodedSymbol> _deduplicateSymbols(List<EncodedSymbol> voice) {
       }
     }
   }
-  if (measureAccum > _Frac.zero) measureDurations.add(measureAccum);
+  endMeasure();
 
-  _Frac nominator;
-  if (measureDurations.isEmpty) {
-    nominator = _Frac.one;
-  } else {
-    measureDurations.sort();
-    // median
-    final mid = measureDurations.length ~/ 2;
-    nominator = measureDurations.length.isOdd
-        ? measureDurations[mid]
-        : (measureDurations[mid - 1] + measureDurations[mid]) * _Frac(1, 2);
+  final whole = _median(all) ?? _Frac.one;
+  final nominators = List<_Frac?>.generate(stretches.length, (i) => _median(stretches[i]));
+  for (var i = nominators.length - 1; i >= 0; i--) {
+    nominators[i] ??= i + 1 < nominators.length ? nominators[i + 1] : whole;
   }
+  return (common, [for (final n in nominators) n!]);
+}
 
-  return (common, nominator);
+_Frac? _median(List<_Frac> values) {
+  if (values.isEmpty) return null;
+  final sorted = [...values]..sort();
+  final mid = sorted.length ~/ 2;
+  return sorted.length.isOdd
+      ? sorted[mid]
+      : (sorted[mid - 1] + sorted[mid]) * _Frac(1, 2);
 }
 
 // ── Conversion state ──────────────────────────────────────────────────────────
@@ -383,9 +430,19 @@ class _State {
   String tremoloState = 'stop';
   int voltaNumber = 1;
   int lastVoltaMeasure = -10;
-  _Frac nominator;
+  /// Bar length of each time signature, in order (see [_findDivisionAndNominator]).
+  final List<_Frac> nominators;
+  int _nextTime = 0;
 
-  _State(this.division, this.nominator) : beats = division;
+  _State(this.division, this.nominators) : beats = division;
+
+  /// The bar length for the next time signature to be written.
+  _Frac takeNominator() {
+    if (nominators.isEmpty) return _Frac.one;
+    final n = nominators[min(_nextTime, nominators.length - 1)];
+    _nextTime++;
+    return n;
+  }
 
   String toggleTremolo() {
     tremoloState = tremoloState == 'start' ? 'stop' : 'start';
@@ -794,12 +851,20 @@ XmlElement _buildKey(EncodedSymbol key) {
 }
 
 void _buildTimeSignature(XmlElement attributes, EncodedSymbol timeSig, _State state) {
-  final denominator = timeSig.rhythm.split('/')[1];
-  final beats = max((state.nominator * _Frac(int.parse(denominator), 1)).num, 1);
-  state.beats = beats * (state.division ~/ 4);
+  final nominator = state.takeNominator();
+  var beatType = int.parse(timeSig.rhythm.split('/')[1]);
+  // A bar length that isn't a whole number of the read beat (7/8 of a whole
+  // under a "/4") is written in smaller beats — 7/8, never "7/4".
+  var count = nominator * _Frac(beatType, 1);
+  while (count.reduced.den != 1 && beatType < 64) {
+    beatType *= 2;
+    count = nominator * _Frac(beatType, 1);
+  }
+  final beats = max(count.num ~/ count.den, 1);
+  state.beats = (beats * state.division) ~/ beatType;
   attributes.children.add(_el('time', [
     _textEl('beats', '$beats'),
-    _textEl('beat-type', denominator),
+    _textEl('beat-type', '$beatType'),
   ]));
 }
 
@@ -1158,8 +1223,8 @@ class MusicXmlAssembler {
       for (int i = 0; i < staves.length; i++) {
         final voice = _deduplicateSymbols(staves[i]);
         final chords = _groupIntoChords(voice);
-        final (division, nominator) = _findDivisionAndNominator(chords);
-        final state = _State(division, nominator);
+        final (division, nominators) = _findDivisionAndNominator(chords);
+        final state = _State(division, nominators);
 
         builder.element('part', attributes: {'id': 'P${i + 1}'}, nest: () {
           for (final m in _buildMeasures(voice, state)) {
