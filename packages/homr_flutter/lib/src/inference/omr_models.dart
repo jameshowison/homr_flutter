@@ -1,3 +1,18 @@
+import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
+
+/// See [OmrModels.resolvePath].
+typedef AssetPathResolver = Future<String?> Function(String assetKey);
+
+/// Opens the model bundled as [asset]: from the path [resolvePath] gives, or
+/// else by the plugin's copy-out-of-the-bundle route.
+Future<OrtSession> openModelSession(
+    String asset, AssetPathResolver? resolvePath) async {
+  final path = await resolvePath?.call(asset);
+  return path != null
+      ? OnnxRuntime().createSession(path)
+      : OnnxRuntime().createSessionFromAsset(asset);
+}
+
 /// Where the three ONNX models live in the APP's asset bundle.
 ///
 /// The package ships no models. They are 140+ MB, far past what belongs in a
@@ -9,6 +24,12 @@
 /// ```dart
 /// final omr = OmrOrchestrator(models: OmrModels.inAssetDir('assets/omr_models'));
 /// ```
+///
+/// By default each model is opened with `createSessionFromAsset`, which first
+/// copies it out of the bundle into the cache directory: on iOS, where the
+/// bundled file is already readable in place, that stores 142 MB twice. An
+/// app that can give a real path for an asset passes [resolvePath], and the
+/// model is opened from there instead.
 class OmrModels {
   /// Asset key of the segmentation network.
   final String segnet;
@@ -19,14 +40,19 @@ class OmrModels {
   /// Asset key of the transformer decoder.
   final String decoder;
 
+  /// A readable file path for an asset key, or null to fall back to copying
+  /// the asset out of the bundle. Null itself means always copy.
+  final AssetPathResolver? resolvePath;
+
   const OmrModels({
     required this.segnet,
     required this.encoder,
     required this.decoder,
+    this.resolvePath,
   });
 
   /// The canonical filenames under one asset folder (no trailing slash).
-  OmrModels.inAssetDir(String dir)
+  OmrModels.inAssetDir(String dir, {this.resolvePath})
       : segnet = '$dir/$segnetFile',
         encoder = '$dir/$encoderFile',
         decoder = '$dir/$decoderFile';

@@ -2,12 +2,15 @@ import 'dart:typed_data';
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 import 'package:image/image.dart' as img;
 
+import 'omr_models.dart';
+
 class SegmentationRunner {
   /// [modelAsset] is the segnet's asset key in the app's bundle; see
-  /// [OmrModels].
-  SegmentationRunner(this.modelAsset);
+  /// [OmrModels], as is [resolvePath].
+  SegmentationRunner(this.modelAsset, {this.resolvePath});
 
   final String modelAsset;
+  final AssetPathResolver? resolvePath;
   static const int _patchSize = 320;
   static const int _numClasses = 6;
   static const int _batchSize = 8;
@@ -17,7 +20,7 @@ class SegmentationRunner {
   static final _sessions = <String, Future<OrtSession>>{};
 
   Future<OrtSession> _getSession() => _sessions.putIfAbsent(
-      modelAsset, () => OnnxRuntime().createSessionFromAsset(modelAsset));
+      modelAsset, () => openModelSession(modelAsset, resolvePath));
 
   Future<Uint8List> runSegmentation(Uint8List pngBytes) async {
     final decoded = img.decodeImage(pngBytes);

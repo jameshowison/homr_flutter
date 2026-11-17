@@ -4,15 +4,18 @@ import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 import 'package:image/image.dart' as img;
 
 import 'encoded_symbol.dart';
+import 'omr_models.dart';
 import 'vocabulary.dart';
 
 class TransformerRunner {
   /// Asset keys of the encoder and decoder in the app's bundle; see
-  /// [OmrModels].
-  TransformerRunner({required this.encoderAsset, required this.decoderAsset});
+  /// [OmrModels], as is [resolvePath].
+  TransformerRunner(
+      {required this.encoderAsset, required this.decoderAsset, this.resolvePath});
 
   final String encoderAsset;
   final String decoderAsset;
+  final AssetPathResolver? resolvePath;
 
   static const int _encoderH = 256;
   static const int _encoderW = 1280;
@@ -29,8 +32,8 @@ class TransformerRunner {
   /// SegmentationRunner).
   static final _sessions = <String, Future<OrtSession>>{};
 
-  static Future<OrtSession> _session(String asset) => _sessions.putIfAbsent(
-      asset, () => OnnxRuntime().createSessionFromAsset(asset));
+  Future<OrtSession> _session(String asset) => _sessions.putIfAbsent(
+      asset, () => openModelSession(asset, resolvePath));
 
   Future<OrtSession> _getEncoderSession() => _session(encoderAsset);
 

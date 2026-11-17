@@ -1,3 +1,12 @@
+## 0.4.0
+
+- `OmrModels` takes an optional `resolvePath`: a real file path for a model's
+  asset key. Given one, the model is opened from that file
+  (`createSession`) rather than by `createSessionFromAsset`, which first
+  copies it into the cache directory. On iOS, where the bundled file can be
+  read in place, that copy stored the 142 MB of models twice. Without it,
+  nothing changes.
+
 ## 0.3.2
 
 - A time signature over nothing but rests gets the commonest top digit for

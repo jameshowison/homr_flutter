@@ -10,5 +10,5 @@
 /// The models are not part of this package; see [OmrModels] and the README.
 library;
 
-export 'src/inference/omr_models.dart' show OmrModels;
+export 'src/inference/omr_models.dart' show OmrModels, AssetPathResolver;
 export 'src/omr_orchestrator.dart' show OmrOrchestrator, OmrStage, OmrException;

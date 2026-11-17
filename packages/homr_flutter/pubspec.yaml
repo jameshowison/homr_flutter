@@ -3,7 +3,7 @@ description: >-
   On-device optical music recognition (OMR) for Flutter: a photo or scan of
   printed sheet music in, MusicXML out. A Dart port of homr, running homr's
   ONNX models via flutter_onnxruntime.
-version: 0.3.2
+version: 0.4.0
 repository: https://github.com/jameshowison/homr_flutter/tree/main/packages/homr_flutter
 issue_tracker: https://github.com/jameshowison/homr_flutter/issues
 topics:

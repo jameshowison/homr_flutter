@@ -52,10 +52,12 @@ class OmrOrchestrator {
   /// [models] says where the app bundled the three ONNX models; the package
   /// ships none. See [OmrModels].
   OmrOrchestrator({required OmrModels models})
-      : _segRunner = SegmentationRunner(models.segnet),
+      : _segRunner =
+            SegmentationRunner(models.segnet, resolvePath: models.resolvePath),
         _transformerRunner = TransformerRunner(
           encoderAsset: models.encoder,
           decoderAsset: models.decoder,
+          resolvePath: models.resolvePath,
         );
 
   /// Injects the inference stages directly — for tests with fake runners.
