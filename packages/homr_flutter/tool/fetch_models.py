@@ -3,6 +3,10 @@
 
     python3 tool/fetch_models.py <dest_dir>               # download from homr's release
     python3 tool/fetch_models.py <dest_dir> --from <dir>  # copy from a local folder (offline)
+    python3 tool/fetch_models.py <dest_dir> --ocr         # PaddleOCR's text models instead
+
+With --ocr it fetches the two PP-OCRv5 models TextReader needs (RapidOCR's
+ONNX conversions, Apache-2.0, ~12.7 MB) for OcrModels.inAssetDir('<dest_dir>').
 
 The app then declares <dest_dir> as an asset folder and passes
 OmrModels.inAssetDir('<dest_dir>') to OmrOrchestrator. The package itself ships
@@ -37,6 +41,16 @@ MODELS = {
         "60c037e2eb30a142d746051e5c3aa0aa23445b3563c44673f95b8b1c5102a6aa",
 }
 
+OCR_BASE = "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv5"
+
+# filename -> (path under OCR_BASE, sha256). Keep in step with OcrModels.sha256.
+OCR_MODELS = {
+    "ch_PP-OCRv5_det_mobile.onnx":
+        ("det", "4d97c44a20d30a81aad087d6a396b08f786c4635742afc391f6621f5c6ae78ae"),
+    "latin_PP-OCRv5_rec_mobile.onnx":
+        ("rec", "b20bd37c168a570f583afbc8cd7925603890efbcdc000a59e22c269d160b5f5a"),
+}
+
 
 def sha256_of(path: str) -> str:
     h = hashlib.sha256()
@@ -62,15 +76,31 @@ def download(name: str, dest: str) -> None:
                 shutil.copyfileobj(src, out)
 
 
+def download_ocr(name: str, dest: str) -> None:
+    """RapidOCR publishes each model as a bare .onnx."""
+    url = f"{OCR_BASE}/{OCR_MODELS[name][0]}/{name}"
+    print(f"  downloading {url}", flush=True)
+    urllib.request.urlretrieve(url, dest)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("dest_dir", help="the app's model asset folder, e.g. assets/omr_models")
+    parser.add_argument("dest_dir",
+                        help="the app's model asset folder, e.g. assets/omr_models")
     parser.add_argument("--from", dest="source", metavar="DIR",
                         help="copy from this folder instead of downloading")
+    parser.add_argument("--ocr", action="store_true",
+                        help="fetch the text-recognition models (OcrModels), not homr's")
     args = parser.parse_args()
 
+    if args.ocr:
+        models = {name: sha for name, (_, sha) in OCR_MODELS.items()}
+        fetch = download_ocr
+    else:
+        models, fetch = MODELS, download
+
     os.makedirs(args.dest_dir, exist_ok=True)
-    for name, expected in MODELS.items():
+    for name, expected in models.items():
         dest = os.path.join(args.dest_dir, name)
         if os.path.exists(dest) and sha256_of(dest) == expected:
             print(f"ok       {name}")
@@ -82,7 +112,7 @@ def main() -> int:
                 return 1
             shutil.copyfile(src, dest)
         else:
-            download(name, dest)
+            fetch(name, dest)
         actual = sha256_of(dest)
         if actual != expected:
             os.remove(dest)

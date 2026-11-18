@@ -47,6 +47,8 @@ app.*.map.json
 # ONNX model files (large binaries — fetch with
 # packages/homr_flutter/tool/fetch_models.py assets/omr_models)
 assets/omr_models/*.onnx
+# PaddleOCR's text models (fetch_models.py assets/ocr_models --ocr)
+assets/ocr_models/*.onnx
 
 # Test scans and ground truth (Suzuki Violin School Book 1 is copyrighted, so
 # they stay local; see "Test data" in README.md)

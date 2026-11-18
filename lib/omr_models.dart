@@ -4,3 +4,7 @@ import 'package:homr_flutter/homr_flutter.dart';
 /// packages/homr_flutter/tool/fetch_models.py; gitignored). Shared by the
 /// demo screens and every integration test that runs real inference.
 final demoModels = OmrModels.inAssetDir('assets/omr_models');
+
+/// Where this demo app bundles PaddleOCR's text models (fetched by
+/// `fetch_models.py assets/ocr_models --ocr`; gitignored).
+final demoOcrModels = OcrModels.inAssetDir('assets/ocr_models');

@@ -1,3 +1,19 @@
+## 0.5.0
+
+- `TextReader` reads printed text on device: `readText(image, region:)`
+  returns `OcrLine`s (text, confidence, a box normalised to the upright
+  image). It runs PaddleOCR's PP-OCRv5 mobile detector and Latin recogniser
+  (RapidOCR's ONNX conversions, Apache-2.0, ~12.7 MB) through
+  `flutter_onnxruntime`, with PaddleOCR's pre- and post-processing and
+  axis-aligned boxes. Words on one line are joined into one `OcrLine`.
+  The sessions are released by `dispose`, not cached for the process.
+  It's meant to replace platform text recognition (ML Kit, Vision) for
+  reading titles.
+- `OcrModels` says where the app bundles the two models, as `OmrModels`
+  does; `tool/fetch_models.py --ocr` fetches and verifies them.
+- On 15 book scans it reads the same text as a Python reference using
+  onnxruntime and OpenCV, give or take a character on hard glyphs.
+
 ## 0.4.0
 
 - `OmrModels` takes an optional `resolvePath`: a real file path for a model's

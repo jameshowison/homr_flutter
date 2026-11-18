@@ -104,8 +104,11 @@ both sides.
   (`integration_test/threshold_strategy_test.dart` has the comparison).
 
 **Not ported, or different.** homr's automatic page crop (`autocrop`) is not
-ported; the app asks the user to crop to the music instead. Title detection is
-not ported. Staves are read one after another into a single part, so a system
+ported; the app asks the user to crop to the music instead. homr's OCR is
+ported as `TextReader` (the same PaddleOCR models, through RapidOCR's ONNX
+conversions), but choosing the title from what it reads is not: the
+recogniser doesn't take a staff position, so the app decides where to look
+and which line is the title. Staves are read one after another into a single part, so a system
 with two staves, such as a duet, comes out as alternating lines rather than
 two parts. Only iOS has been tried.
 

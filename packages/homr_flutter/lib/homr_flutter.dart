@@ -7,8 +7,14 @@
 /// final musicXml = await omr.recognise(pngOrJpegBytes, title: 'Lightly Row');
 /// ```
 ///
-/// The models are not part of this package; see [OmrModels] and the README.
+/// [TextReader] reads printed text, such as a piece's title, with
+/// PaddleOCR's models.
+///
+/// The models are not part of this package; see [OmrModels], [OcrModels]
+/// and the README.
 library;
 
 export 'src/inference/omr_models.dart' show OmrModels, AssetPathResolver;
 export 'src/omr_orchestrator.dart' show OmrOrchestrator, OmrStage, OmrException;
+export 'src/ocr/ocr_models.dart' show OcrModels;
+export 'src/ocr/text_reader.dart' show TextReader, OcrLine;

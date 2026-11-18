@@ -46,6 +46,32 @@ Some notes on input:
 - `onProgress` reports each `OmrStage` as recognition moves through segmentation, staff detection, recognition and assembly.
 - It throws `OmrException` if it can't find any staves, or can't read any symbols.
 
+## Reading titles
+
+`TextReader` reads printed text: a piece's title, for instance. It runs
+PaddleOCR's PP-OCRv5 mobile models (a text detector and a Latin-script
+recogniser, about 12.7 MB together), which is how homr finds titles too, and
+needs no native code beyond `flutter_onnxruntime`. Fetch them like the music
+models, into their own folder, and declare that folder as an asset:
+
+```bash
+python3 <path-to>/homr_flutter/tool/fetch_models.py assets/ocr_models --ocr
+```
+
+```dart
+final reader = TextReader(OcrModels.inAssetDir('assets/ocr_models'));
+// The top quarter of the page. Boxes come back normalised to the whole
+// upright image (EXIF orientation applied), top-left origin.
+final lines = await reader.readText(jpegBytes,
+    region: const Rect.fromLTWH(0, 0, 1, 0.25));
+for (final l in lines) print('${l.text} ${l.confidence} ${l.box}');
+await reader.dispose(); // frees the models until the next readText
+```
+
+It reads horizontal text only: there is no angle classifier. The words of a
+line come back as one `OcrLine`, as the platform text recognisers return them.
+Choosing which line is the title is left to the app.
+
 `package:homr_flutter/preprocessing.dart` holds image helpers for previews and experiments (resizing, Otsu thresholding). They're experimental, and recognition doesn't need them.
 
 ## Accuracy
@@ -54,4 +80,6 @@ On the four benchmark photos in this repository (`integration_test/benchmark_omr
 
 ## Licence
 
-AGPL-3.0-or-later, the same as homr, which this package ports. The models belong to the homr project and are distributed under its terms.
+AGPL-3.0-or-later, the same as homr, which this package ports. The music models belong to the homr project and are distributed under its terms.
+
+The text models are [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)'s PP-OCRv5 models, in the ONNX conversions published by [RapidOCR](https://github.com/RapidAI/RapidOCR), both Apache-2.0. The recogniser's character list, which this package includes as `lib/src/ocr/latin_dict.dart`, is PaddleOCR's `latin_dict.txt`, also Apache-2.0. An app that bundles the models should include PaddleOCR's Apache-2.0 notice ("Copyright (c) PaddlePaddle Authors") among its licences.

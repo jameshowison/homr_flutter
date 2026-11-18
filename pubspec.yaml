@@ -63,6 +63,8 @@ flutter:
     - assets/ground_truth/
     # homr's ONNX models (gitignored): packages/homr_flutter/tool/fetch_models.py
     - assets/omr_models/
+    # PaddleOCR's text models (gitignored): fetch_models.py assets/ocr_models --ocr
+    - assets/ocr_models/
 
   # To add custom fonts to your application, add a fonts section here,
   # in this "flutter" section. Each entry in this list should have a
