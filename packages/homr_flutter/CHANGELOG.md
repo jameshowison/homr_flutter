@@ -1,3 +1,25 @@
+## 0.5.1
+
+- `readText` takes an optional `accept` (and `sameSizeTolerance`, 5%).
+  Given one, it reads lines tallest first and stops once it has every line
+  within the tolerance of the tallest accepted one, returning only the lines
+  read. An app that wants the line in the largest type gets the same answer
+  from far fewer recogniser runs. Over a 22-page title corpus on a low-end
+  Android emulator (`dev-android-low`):
+
+  | | Median | Worst | Recogniser runs | Titles found |
+  |---|---|---|---|---|
+  | 0.5.0 | 1774 ms | 7655 ms | 4–80 per page | 14/22 |
+  | 0.5.1 with `accept` | 667 ms | 1400 ms | 1–3 per page | 14/22, the same ones |
+
+- Words are grouped into lines from the detector's boxes, before
+  recognition (`mergeLines` worked on recognised text), so line sizes are
+  known first. A line's box is now around all its words, including any
+  that read as empty. On the corpus, every page reads the same lines as
+  0.5.0.
+- Both sessions start opening while the page decodes.
+- `--dart-define=HOMR_OCR_TIMINGS=true` prints per-stage timings.
+
 ## 0.5.0
 
 - `TextReader` reads printed text on device: `readText(image, region:)`

@@ -160,7 +160,7 @@ packages:
       path: "packages/homr_flutter"
       relative: true
     source: path
-    version: "0.5.0"
+    version: "0.5.1"
   hooks:
     dependency: transitive
     description:

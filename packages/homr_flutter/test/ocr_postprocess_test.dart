@@ -8,8 +8,12 @@ import 'package:homr_flutter/src/ocr/ocr_postprocess.dart';
 
 /// A [w] × [h] map, 0 everywhere but [p] over each rectangle (x0, y0, x1, y1
 /// inclusive).
-Float32List _map(int w, int h, List<(int, int, int, int)> rects,
-    {double p = 0.9}) {
+Float32List _map(
+  int w,
+  int h,
+  List<(int, int, int, int)> rects, {
+  double p = 0.9,
+}) {
   final m = Float32List(w * h);
   for (final (x0, y0, x1, y1) in rects) {
     for (var y = y0; y <= y1; y++) {
@@ -73,47 +77,134 @@ void main() {
       expect(latinCharacters.take(3), ['!', '"', '#']);
       expect(latinCharacters, isNot(contains(' ')));
       final r = ctcDecode(
-          _steps([latinCharacters.indexOf('A') + 1, 503,
-              latinCharacters.indexOf('é') + 1], 504),
-          3, 504, latinCharacters);
+        _steps([
+          latinCharacters.indexOf('A') + 1,
+          503,
+          latinCharacters.indexOf('é') + 1,
+        ], 504),
+        3,
+        504,
+        latinCharacters,
+      );
       expect(r.text, 'A é');
     });
   });
 
-  group('mergeLines', () {
-    ReadBox r(double l, double t, double rt, double b, String s, double c) =>
-        (box: PixelBox(l, t, rt, b, 0.8), text: s, confidence: c);
+  group('groupLines', () {
+    PixelBox b(double l, double t, double r, double bo) =>
+        PixelBox(l, t, r, bo, 0.8);
+    List<List<double>> lefts(List<LineBoxes> lines) => [
+      for (final l in lines) [for (final w in l.words) w.left],
+    ];
 
-    test('joins the words of a large title, in order', () {
+    test('joins the words of a large title, left to right', () {
       // The detector's boxes for a 72 pt "Lightly Row": they even overlap.
-      final out = mergeLines([
-        r(848, 52, 1012, 121, 'Row', 0.994),
-        r(588, 50, 860, 123, 'Lightly', 1.0),
+      final out = groupLines([b(848, 52, 1012, 121), b(588, 50, 860, 123)]);
+      expect(lefts(out), [
+        [588, 848],
       ]);
-      expect(out, hasLength(1));
-      expect(out.single.text, 'Lightly Row');
       expect(out.single.box.left, 588);
+      expect(out.single.box.top, 50);
       expect(out.single.box.right, 1012);
-      expect(out.single.confidence, closeTo((7 * 1.0 + 3 * 0.994) / 10, 1e-9));
+      expect(out.single.box.bottom, 123);
     });
 
     test('keeps apart: far gaps, other lines, much smaller type', () {
-      final out = mergeLines([
-        r(100, 50, 300, 110, 'Allegro', 0.9),
-        r(700, 52, 800, 108, 'Suzuki', 0.9), // 400 px away
-        r(100, 130, 300, 160, 'Moderato', 0.9), // the next line down
-        r(305, 70, 340, 95, '3', 0.9), // beside the title, under half its size
+      final out = groupLines([
+        b(100, 50, 300, 110), // a title
+        b(700, 52, 800, 108), // 400 px away
+        b(100, 130, 300, 160), // the next line down
+        b(305, 70, 340, 95), // beside the title, under half its size
       ]);
-      expect([for (final l in out) l.text], ['Allegro', 'Suzuki', '3', 'Moderato']);
+      // Reading order: the "3" starts 20 px lower, so it is its own line.
+      expect(lefts(out), [
+        [100],
+        [700],
+        [305],
+        [100],
+      ]);
     });
 
     test('a word gap of under 0.8 heights joins', () {
-      final out = mergeLines([
-        r(0, 0, 100, 40, 'Song', 0.9),
-        r(130, 2, 200, 40, 'of', 0.9),
-        r(225, 0, 300, 41, 'Wind', 0.9),
+      final out = groupLines([
+        b(0, 0, 100, 40),
+        b(130, 2, 200, 40),
+        b(225, 0, 300, 41),
       ]);
-      expect([for (final l in out) l.text], ['Song of Wind']);
+      expect(lefts(out), [
+        [0, 130, 225],
+      ]);
+    });
+  });
+
+  group('joinWords', () {
+    test('joins with spaces, confidence weighted by length', () {
+      final r = joinWords([
+        (text: 'Lightly', confidence: 1.0),
+        (text: 'Row', confidence: 0.994),
+      ]);
+      expect(r.text, 'Lightly Row');
+      expect(r.confidence, closeTo((7 * 1.0 + 3 * 0.994) / 10, 1e-9));
+    });
+
+    test('skips words that read empty', () {
+      final r = joinWords([
+        (text: ' ', confidence: 0.2),
+        (text: 'Andante', confidence: 0.9),
+        (text: '', confidence: 0.0),
+      ]);
+      expect(r.text, 'Andante');
+      expect(r.confidence, closeTo(0.9, 1e-9));
+    });
+
+    test('all empty is empty', () {
+      expect(joinWords([(text: '', confidence: 0.0)]).text, '');
+    });
+  });
+
+  group('readLargestFirst', () {
+    /// Lines of these heights, the i-th one [i * 50] px down the page.
+    List<PixelBox> lines(List<double> heights) => [
+      for (var i = 0; i < heights.length; i++)
+        PixelBox(0, i * 50.0, 100, i * 50.0 + heights[i], 0.8),
+    ];
+
+    Future<List<int>> run(List<double> heights, Set<int> acceptable) =>
+        readLargestFirst(lines(heights), (i) async => acceptable.contains(i));
+
+    test('tallest first; stops past the size of the first accepted', () async {
+      // 0: 30, 1: 60 (accepted), 2: 58 (within 5 %), 3: 56 (> 5 % shorter).
+      expect(await run([30, 60, 58, 56], {1}), [1, 2]);
+    });
+
+    test('rejected tall lines are read and passed over', () async {
+      // The tallest (a page number, say) is rejected; the next is taken.
+      expect(await run([20, 80, 50, 49, 30], {2, 4}), [1, 2, 3]);
+    });
+
+    test(
+      'every line of the same size is read, so the topmost can be picked',
+      () async {
+        // Equal heights: higher on the page first, and all of them read.
+        expect(await run([40, 40, 40, 10], {2}), [0, 1, 2]);
+      },
+    );
+
+    test('nothing accepted: every line, tallest first', () async {
+      expect(await run([10, 30, 20], {}), [1, 2, 0]);
+    });
+
+    test('the tolerance is a parameter', () async {
+      final read = await readLargestFirst(
+        lines([100, 85, 70]),
+        (i) async => i == 0,
+        sameSizeTolerance: 0.2,
+      );
+      expect(read, [0, 1]);
+    });
+
+    test('no lines, no reads', () async {
+      expect(await run([], {}), isEmpty);
     });
   });
 

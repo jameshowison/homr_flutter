@@ -108,10 +108,18 @@ void main() {
         expect(title.box.bottom, lessThan(0.35));
 
         expect([for (final l in top) l.text], ['Lightly Row', 'Hanschen klein']);
-        // Boxes stay in whole-image coordinates when a region is given.
+        // Boxes stay in whole-image coordinates when a region is given. They
+        // can differ by a few pixels: the whole page is scaled to 0.6 for the
+        // detector, the strip is not. Region-relative boxes would be 0.2+ off.
         final again = top.first.box;
-        expect(again.left, closeTo(title.box.left, 0.01));
-        expect(again.top, closeTo(title.box.top, 0.01));
+        expect(again.left, closeTo(title.box.left, 0.02));
+        expect(again.top, closeTo(title.box.top, 0.02));
+
+        // Largest type first: the title is the tallest line and is taken,
+        // and nothing else is as large, so nothing else is read.
+        final picked = await reader.readText(page, accept: (l) => l.text.length >= 4);
+        expect([for (final l in picked) l.text], ['Lightly Row']);
+        expect(picked.single.box, title.box);
       } finally {
         await reader.dispose();
       }

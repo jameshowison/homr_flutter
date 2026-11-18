@@ -72,6 +72,28 @@ It reads horizontal text only: there is no angle classifier. The words of a
 line come back as one `OcrLine`, as the platform text recognisers return them.
 Choosing which line is the title is left to the app.
 
+Reading every line of a busy page takes seconds on a low-end phone: almost
+all of that is the recogniser, run once per word. When the app wants the
+line in the largest type, it passes `accept`, its test for a line that could
+be the title, and only as much is read as that choice needs:
+
+```dart
+final lines = await reader.readText(jpegBytes,
+    region: titleStrip,
+    accept: (l) => looksLikeATitle(l.text, l.confidence));
+```
+
+Lines are then read tallest first. Reading stops before the first line more
+than `sameSizeTolerance` (5%) shorter than the tallest accepted line. The
+lines read are returned, accepted or not. They include every line within
+that tolerance of the tallest accepted one, so "the topmost acceptable line
+within 5% of the tallest" comes out the same as from a full read. On the
+22-page title corpus behind this, a low-end Android emulator went from a
+median of 1.8 s to 0.67 s, with the same title chosen on every page.
+
+`--dart-define=HOMR_OCR_TIMINGS=true` prints how long each stage of a
+`readText` took (numbers only, no text).
+
 `package:homr_flutter/preprocessing.dart` holds image helpers for previews and experiments (resizing, Otsu thresholding). They're experimental, and recognition doesn't need them.
 
 ## Accuracy

@@ -103,8 +103,10 @@ List<PixelBox> dbBoxes(
 
 /// Top-to-bottom, then left-to-right among boxes whose tops are within
 /// [lineTolerance] px of each other (PaddleOCR's `sorted_boxes`).
-List<PixelBox> sortReadingOrder(List<PixelBox> boxes,
-    {double lineTolerance = 10}) {
+List<PixelBox> sortReadingOrder(
+  List<PixelBox> boxes, {
+  double lineTolerance = 10,
+}) {
   final byTop = [...boxes]..sort((a, b) => a.top.compareTo(b.top));
   final lines = <List<PixelBox>>[];
   for (final b in byTop) {
@@ -120,46 +122,107 @@ List<PixelBox> sortReadingOrder(List<PixelBox> boxes,
   ];
 }
 
-/// A recognised box: where, what, and how sure.
-typedef ReadBox = ({PixelBox box, String text, double confidence});
+/// A line of text found by the detector, before it is read: its words'
+/// boxes, left to right, and the box around them all.
+class LineBoxes {
+  final PixelBox box;
+  final List<PixelBox> words;
+  const LineBoxes(this.box, this.words);
+}
 
-/// Joins boxes that are words of one line, as Vision and ML Kit report text:
-/// the detector splits large type at word gaps ("Lightly", "Row"), and a
-/// title has to come back whole.
+/// Groups the detector's boxes into lines, as Vision and ML Kit report
+/// text: the detector splits large type at word gaps ("Lightly", "Row"), and
+/// a title has to come back whole. Only geometry is used, so it runs before
+/// recognition, and the lines' sizes are known before any is read.
 ///
 /// Going left to right, a box joins a line when they overlap vertically by
 /// at least half the shorter one's height, their heights are within
 /// [maxHeightRatio] of each other (so a title doesn't swallow a smaller
 /// marking beside it), and the gap between them is at most [maxGap] × the
-/// shorter height. Texts are joined with a space; confidence is their mean
-/// weighted by length. The result is in reading order ([sortReadingOrder]).
-List<ReadBox> mergeLines(List<ReadBox> boxes,
-    {double maxGap = 0.8, double maxHeightRatio = 1.5}) {
-  final byLeft = [...boxes]..sort((a, b) => a.box.left.compareTo(b.box.left));
-  final lines = <ReadBox>[];
+/// shorter height. The result is in reading order ([sortReadingOrder]).
+List<LineBoxes> groupLines(
+  List<PixelBox> boxes, {
+  double maxGap = 0.8,
+  double maxHeightRatio = 1.5,
+}) {
+  final byLeft = [...boxes]..sort((a, b) => a.left.compareTo(b.left));
+  final lines = <LineBoxes>[];
   for (final b in byLeft) {
     final i = lines.lastIndexWhere(
-        (l) => _sameLine(l.box, b.box, maxGap, maxHeightRatio));
+      (l) => _sameLine(l.box, b, maxGap, maxHeightRatio),
+    );
     if (i < 0) {
-      lines.add(b);
+      lines.add(LineBoxes(b, [b]));
       continue;
     }
-    final l = lines[i];
-    final n1 = l.text.length, n2 = b.text.length;
-    lines[i] = (
-      box: PixelBox(
-        math.min(l.box.left, b.box.left),
-        math.min(l.box.top, b.box.top),
-        math.max(l.box.right, b.box.right),
-        math.max(l.box.bottom, b.box.bottom),
-        math.max(l.box.score, b.box.score),
+    final l = lines[i].box;
+    lines[i] = LineBoxes(
+      PixelBox(
+        math.min(l.left, b.left),
+        math.min(l.top, b.top),
+        math.max(l.right, b.right),
+        math.max(l.bottom, b.bottom),
+        math.max(l.score, b.score),
       ),
-      text: '${l.text} ${b.text}',
-      confidence: (l.confidence * n1 + b.confidence * n2) / (n1 + n2),
+      [...lines[i].words, b],
     );
   }
   final order = sortReadingOrder([for (final l in lines) l.box]);
-  return [for (final box in order) lines.firstWhere((l) => identical(l.box, box))];
+  return [
+    for (final box in order) lines.firstWhere((l) => identical(l.box, box)),
+  ];
+}
+
+/// A line's words, read one by one, as one line: non-empty texts joined
+/// with a space, confidence their mean weighted by length. Empty text if
+/// every word read empty.
+CtcResult joinWords(Iterable<CtcResult> words) {
+  final kept = [
+    for (final w in words)
+      if (w.text.trim().isNotEmpty)
+        (text: w.text.trim(), confidence: w.confidence),
+  ];
+  final n = kept.fold(0, (sum, w) => sum + w.text.length);
+  return (
+    text: kept.map((w) => w.text).join(' '),
+    confidence: n == 0
+        ? 0.0
+        : kept.fold(0.0, (sum, w) => sum + w.confidence * w.text.length) / n,
+  );
+}
+
+/// Which of [heights]' lines to read, and in what order, to find the one an
+/// app wants in the largest type: tallest first (the higher on the page
+/// first among equals), stopping before the first line more than
+/// [sameSizeTolerance] shorter than the tallest line [read] accepted.
+///
+/// [read] reads line i and says whether it is acceptable. Returns the indices
+/// read, in the order read. Every line at least (1 − [sameSizeTolerance]) ×
+/// the tallest accepted line's height is read, so a choice of "the topmost
+/// acceptable line within that tolerance of the tallest acceptable one" made
+/// over these lines is the same as over all of them. With nothing accepted,
+/// every line is read.
+Future<List<int>> readLargestFirst(
+  List<PixelBox> lines,
+  Future<bool> Function(int index) read, {
+  double sameSizeTolerance = 0.05,
+}) async {
+  final order = List<int>.generate(lines.length, (i) => i)
+    ..sort((a, b) {
+      final byHeight = lines[b].height.compareTo(lines[a].height);
+      return byHeight != 0 ? byHeight : lines[a].top.compareTo(lines[b].top);
+    });
+  final done = <int>[];
+  double? accepted;
+  for (final i in order) {
+    if (accepted != null &&
+        lines[i].height < accepted * (1 - sameSizeTolerance)) {
+      break;
+    }
+    done.add(i);
+    if (await read(i)) accepted ??= lines[i].height;
+  }
+  return done;
 }
 
 /// Whether [b], which starts at or right of [a]'s left edge, continues [a]'s
@@ -182,7 +245,11 @@ typedef CtcResult = ({String text, double confidence});
 /// Confidence is the mean of the kept steps' probabilities, 0 when nothing
 /// is kept.
 CtcResult ctcDecode(
-    List<double> probs, int steps, int classes, List<String> characters) {
+  List<double> probs,
+  int steps,
+  int classes,
+  List<String> characters,
+) {
   assert(probs.length >= steps * classes);
   final text = StringBuffer();
   var sum = 0.0, kept = 0, previous = -1;

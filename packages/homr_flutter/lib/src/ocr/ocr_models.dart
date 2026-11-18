@@ -29,8 +29,8 @@ class OcrModels {
 
   /// The canonical filenames under one asset folder (no trailing slash).
   OcrModels.inAssetDir(String dir, {this.resolvePath})
-      : detector = '$dir/$detFile',
-        recognizer = '$dir/$recFile';
+    : detector = '$dir/$detFile',
+      recognizer = '$dir/$recFile';
 
   /// RapidOCR's model repository, a pinned tag; the files are under
   /// `PP-OCRv5/det/` and `PP-OCRv5/rec/`.
